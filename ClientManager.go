@@ -12,8 +12,9 @@ import (
 // Host field. Clients are set up and accessed by sending
 // ClientRequests to the ClientManager goroutine using SendRequest().
 type ClientManager struct {
-	newClient chan *ClientRequest
-	clients   map[string]Client
+	newConnection chan *ConnectionRequest
+	deleteClient  chan *string
+	clients       map[string]*Client
 }
 
 var clientManager *ClientManager
@@ -25,8 +26,9 @@ var once sync.Once
 func GetClientManager() *ClientManager {
 	once.Do(func() {
 		clientManager = &ClientManager{
-			newClient: make(chan *ClientRequest),
-			clients:   make(map[string]Client),
+			newConnection: make(chan *ConnectionRequest),
+			deleteClient:  make(chan *string),
+			clients:       make(map[string]*Client),
 		}
 
 		go clientManager.requestListener()
@@ -37,86 +39,87 @@ func GetClientManager() *ClientManager {
 
 // SendRequest sends a ClientRequest to the ClientManager runtime. The
 // caller should expect a ClientResponse on the Response channel.
-func (cm *ClientManager) SendRequest(req *ClientRequest) error {
-	if nil == cm.newClient {
+func (cm *ClientManager) SendRequest(req *ConnectionRequest) error {
+	if nil == cm.newConnection {
 		return errors.New("Uninitialized ClientManager")
 	}
 	go func() {
-		cm.newClient <- req
+		cm.newConnection <- req
 	}()
 	return nil
 }
 
-// ClientRequests are sent to ClientManager's runtime to get a
-// ClientResponse back on the Response channel. The Client is set up if
-// it does not exist. If a Client with the same Host already exists, all
-// settings must match for a successful ClientResponse.
-type ClientRequest struct {
-	Client
-	Response chan *ClientResponse
-}
-
-// NewClientRequest creates a new ClientRequest with an initialized
-// Response channel. User must then set the Client settings directly.
-func NewClientRequest() *ClientRequest {
-	return &ClientRequest{
-		Response: make(chan *ClientResponse),
-	}
-}
-
-// sendResponse is a convenience function for sending a ClientResponse.
-func (req *ClientRequest) sendResponse(res *ClientResponse) {
-	req.Response <- res
-}
-
-// ClientResponse contains the QueryQueue channel for the Client
-// requested in a ClientRequest previously sent to the ClientManager.
-// The QueryQueue channel can then be used to queue a Query on the Client
-// resource.
-type ClientResponse struct {
-	QueryQueue chan *Query
-	Err        error
-}
-
-// requestListener listens for incoming ClientRequests and sends a
-// ClientResponse to the ClientRequest.Response channel. On success,
-// the ClientResponse has a valid QueryQueue channel for sending queries to
-// the requested client. On failure, ClientResponse.Error is set.
+// requestListener listens for incoming ConnectionRequests and sends a
+// ConnectionResponse to the ConnectionRequest.Response channel. On success,
+// the ConnectionResponse has a valid QueryQueue channel for sending queries to
+// the requested client. On failure, ConnectionResponse.Error is set.
 // Failure will occur if the client fails or if a client for the
 // requested Host already exists with different settings. Existing clients
 // can only be requested if all settings match exactly.
 func (cm *ClientManager) requestListener() {
-	for conReq := range cm.newClient {
-		if nil == conReq.Response {
-			continue
-		}
-		con, ok := cm.clients[conReq.Host]
-		if ok {
-			if con.Mode == conReq.Mode &&
-				con.Baud == conReq.Baud {
-				conReq.Response <- &ClientResponse{
-					QueryQueue: con.queryQueue,
-				}
-			} else {
-				// Host is in use but other
-				// client details didn't match
-				err := errors.New(fmt.Sprintf("Host '%s' is already "+
-					"in use with different client settings.",
-					con.Host))
-				go conReq.sendResponse(&ClientResponse{Err: err})
-			}
-		} else {
-			// Set up new client
-			con = conReq.Client
-			err := con.startClient()
-			if nil != err {
-				go conReq.sendResponse(&ClientResponse{Err: err})
+	for {
+		select {
+		case delReq := <-cm.deleteClient:
+			delete(cm.clients, *delReq)
+		case conReq := <-cm.newConnection:
+			if nil == conReq.Response {
 				continue
 			}
-			cm.clients[con.Host] = con
-			go conReq.sendResponse(&ClientResponse{
-				QueryQueue: con.queryQueue,
-			})
+			cl, ok := cm.clients[conReq.Host]
+			if ok {
+				func() {
+					cl.wg.Add(1)
+					defer cl.wg.Add(-1)
+					cl.mu.Lock()
+					defer cl.mu.Unlock()
+
+					if cl.Connection != conReq.Connection {
+						// Host is in use but other
+						// client details didn't match
+						err := errors.New(fmt.Sprintf("Host '%s' is already "+
+							"in use with different client settings.",
+							cl.Host))
+						go conReq.sendResponse(nil, err)
+						return
+					}
+
+					var run bool = true
+					for run {
+						select {
+						case delReq := <-cm.deleteClient:
+							if *delReq == cl.Host {
+								// Restart Client
+								qq, err := cl.StartClient()
+								if nil != err {
+									go conReq.sendResponse(nil, err)
+								} else {
+									go conReq.sendResponse(qq, nil)
+								}
+								return
+							}
+							delete(cm.clients, *delReq)
+						default:
+							run = false
+						}
+					}
+					qq, err := cl.newQueryQueue()
+					if nil != err {
+						go conReq.sendResponse(nil, err)
+					} else {
+						go conReq.sendResponse(qq, nil)
+					}
+				}()
+			} else {
+				// Set up new client
+				cl = &Client{Connection: conReq.Connection}
+				qq, err := cl.StartClient()
+				if nil != err {
+					go conReq.sendResponse(nil, err)
+					continue
+				}
+				cm.clients[cl.Host] = cl
+				go conReq.sendResponse(qq, nil)
+			}
 		}
 	}
 }
