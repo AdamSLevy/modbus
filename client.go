@@ -8,10 +8,10 @@ import (
 	"sync"
 )
 
-// Connection holds all connection settings. Connections and Clients are
-// uniquely identified by their Host string. For ModeTCP this is the FQDN or IP
-// address AND the port number. For ModeRTU and ModeASCII the Host string holds
-// the full path to the serial device (Linux) or the name of the COM port
+// ConnectionSettings holds all connection settings. Connections and clients
+// are uniquely identified by their Host string. For ModeTCP this is the FQDN
+// or IP address AND the port number. For ModeRTU and ModeASCII the Host string
+// holds the full path to the serial device (Linux) or the name of the COM port
 // (Windows).
 type ConnectionSettings struct {
 	Mode
@@ -19,9 +19,9 @@ type ConnectionSettings struct {
 	Baud int
 }
 
-// Client contains the connection settings, the connection handler, and the
+// client contains the connection settings, the connection handler, and the
 // queryQueue used to listen for queries.
-type Client struct {
+type client struct {
 	ConnectionSettings
 	Packager
 
@@ -34,7 +34,7 @@ type Client struct {
 
 // queryListener executes Queries sent on the queryQueue and sends
 // QueryResponses to the Query's Response channel.
-func (c *Client) queryListener() {
+func (c *client) queryListener() {
 	defer c.Close()
 	// Set up client for slave
 	for qry := range c.queryQueue {
@@ -57,10 +57,10 @@ func (c *Client) queryListener() {
 	}
 }
 
-// StartClient sets up the appropriate transporter and packager and if
+// startClient sets up the appropriate transporter and packager and if
 // successful, creates the queryQueue channel and starts the Connection's
 // goroutine.
-func (c *Client) StartClient() (chan *Query, error) {
+func (c *client) startClient() (chan *Query, error) {
 	var t Transporter
 	switch c.Mode {
 	case ModeTCP:
@@ -117,7 +117,7 @@ func (c *Client) StartClient() (chan *Query, error) {
 				run = false
 			}
 		}
-		clientManager.deleteClient <- &c.Host
+		connectionManager.deleteClient <- &c.Host
 		close(c.queryQueue)
 		close(c.newQQSignal)
 		c.queryQueue = nil
@@ -127,7 +127,7 @@ func (c *Client) StartClient() (chan *Query, error) {
 	return qq, nil
 }
 
-func (c *Client) queryQueueChannelMonitor() {
+func (c *client) queryQueueChannelMonitor() {
 	var run = true
 	for run {
 		// Wait until all QueryQueues have signaled Done()
@@ -147,7 +147,7 @@ func (c *Client) queryQueueChannelMonitor() {
 			run = false
 		}
 	}
-	clientManager.deleteClient <- &c.Host
+	connectionManager.deleteClient <- &c.Host
 	close(c.queryQueue)
 	close(c.newQQSignal)
 	c.queryQueue = nil
@@ -156,11 +156,11 @@ func (c *Client) queryQueueChannelMonitor() {
 }
 
 // newQueryQueue generates a new QueryQueue channel and a goroutine that
-// forwards the queries onto the Client's main internal queryQueue. Each
-// goroutine that sends queries to the Client needs their own QueryQueue if
-// they are to be allowed to close the channel. Clients with no remaining open
+// forwards the queries onto the client's main internal queryQueue. Each
+// goroutine that sends queries to the client needs their own QueryQueue if
+// they are to be allowed to close the channel. clients with no remaining open
 // channels shut themselves down.
-func (c *Client) newQueryQueue() (chan *Query, error) {
+func (c *client) newQueryQueue() (chan *Query, error) {
 	if nil == c.queryQueue {
 		return nil, errors.New("Client is not running")
 	}
@@ -172,13 +172,13 @@ func (c *Client) newQueryQueue() (chan *Query, error) {
 	// the forwarding goroutine exits on channel close. This allows the
 	// queryQueueChannelMonitor to avoid a race condition between shutting
 	// down the client due to all channels closing and another goroutine,
-	// such as the the ClientManager's requestListener, setting up a new
+	// such as the the ConnectionManager's requestListener, setting up a new
 	// QueryQueue channel.
 	go func() {
 		c.newQQSignal <- true
 	}()
 	// This goroutine forwards queries from the newly created QueryQueue
-	// onto the Client's main internal queryQueue.
+	// onto the client's main internal queryQueue.
 	go func() {
 		for q := range qq {
 			c.queryQueue <- q

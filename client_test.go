@@ -6,7 +6,7 @@ import (
 )
 
 func TestClientQueryListener(t *testing.T) {
-	cm := GetClientManager()
+	cm := GetConnectionManager()
 	req := NewConnectionRequest()
 	req.Host = "/dev/pts/3"
 	req.Baud = 19200
@@ -15,7 +15,7 @@ func TestClientQueryListener(t *testing.T) {
 
 	res := <-req.Response
 	if nil != res.Err {
-		t.Error("ClientRequest failed", res.Err)
+		t.Error("ConnectionRequest failed", res.Err)
 	}
 
 	qry := NewQuery()
