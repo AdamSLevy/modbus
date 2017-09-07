@@ -12,7 +12,7 @@ package modbus
 // always be returned to the caller on the Response channel with either a
 // QueryQueue channel or an error.
 type ConnectionRequest struct {
-	Connection
+	ConnectionSettings
 	Response chan *ConnectionResponse
 }
 

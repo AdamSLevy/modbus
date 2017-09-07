@@ -12,6 +12,7 @@ type Packager interface {
 // their respective Modbus protocols.
 type PackagerSettings struct {
 	Transporter
+	*Query
 
 	TimeoutInMilliseconds int
 	Validate              bool
@@ -19,15 +20,13 @@ type PackagerSettings struct {
 
 	pkt    []byte
 	pktLen int
-
-	qry *Query
 }
 
 func (pkgr *PackagerSettings) isValidResponse(response []byte) (bool, error) {
 	// check the validity of the response
-	if response[0] != pkgr.qry.SlaveID || response[1] != pkgr.qry.FunctionCode {
-		if response[0] == pkgr.qry.SlaveID &&
-			(response[1]&0x7f) == pkgr.qry.FunctionCode {
+	if response[0] != pkgr.SlaveID || response[1] != pkgr.FunctionCode {
+		if response[0] == pkgr.SlaveID &&
+			(response[1]&0x7f) == pkgr.FunctionCode {
 			switch response[2] {
 			case exceptionIllegalFunction:
 				return false, exceptions[exceptionIllegalFunction]

@@ -62,64 +62,70 @@ func (cm *ClientManager) requestListener() {
 		case delReq := <-cm.deleteClient:
 			delete(cm.clients, *delReq)
 		case conReq := <-cm.newConnection:
-			if nil == conReq.Response {
-				continue
-			}
-			cl, ok := cm.clients[conReq.Host]
-			if ok {
-				func() {
-					cl.wg.Add(1)
-					defer cl.wg.Add(-1)
-					cl.mu.Lock()
-					defer cl.mu.Unlock()
-
-					if cl.Connection != conReq.Connection {
-						// Host is in use but other
-						// client details didn't match
-						err := fmt.Errorf("Host '%s' is already "+
-							"in use with different client "+
-							"settings.", cl.Host)
-						go conReq.sendResponse(nil, err)
-						return
-					}
-
-					var run = true
-					for run {
-						select {
-						case delReq := <-cm.deleteClient:
-							if *delReq == cl.Host {
-								// Restart Client
-								qq, err := cl.StartClient()
-								if nil != err {
-									go conReq.sendResponse(nil, err)
-								} else {
-									go conReq.sendResponse(qq, nil)
-								}
-								return
-							}
-							delete(cm.clients, *delReq)
-						default:
-							run = false
-						}
-					}
-					qq, err := cl.newQueryQueue()
-					if nil != err {
-						go conReq.sendResponse(nil, err)
-					} else {
-						go conReq.sendResponse(qq, nil)
-					}
-				}()
-			} else {
-				// Set up new client
-				cl = &Client{Connection: conReq.Connection}
-				qq, err := cl.StartClient()
-				if nil != err {
-					go conReq.sendResponse(nil, err)
-					continue
-				}
-				cm.clients[cl.Host] = cl
-				go conReq.sendResponse(qq, nil)
-			}
+			cm.handleConnectionRequest(conReq)
 		}
 	}
+}
+
+func (cm *ClientManager) handleConnectionRequest(conReq *ConnectionRequest) {
+	if nil == conReq.Response {
+		return
+	}
+	cl, ok := cm.clients[conReq.Host]
+	if ok {
+		func() {
+			cl.wg.Add(1)
+			defer cl.wg.Add(-1)
+			cl.mu.Lock()
+			defer cl.mu.Unlock()
+
+			if cl.ConnectionSettings !=
+				conReq.ConnectionSettings {
+				// Host is in use but other
+				// client details didn't match
+				err := fmt.Errorf("Host '%s' is already "+
+					"in use with different client "+
+					"settings.", cl.Host)
+				go conReq.sendResponse(nil, err)
+				return
+			}
+
+			var run = true
+			for run {
+				select {
+				case delReq := <-cm.deleteClient:
+					if *delReq == cl.Host {
+						// Restart Client
+						qq, err := cl.StartClient()
+						if nil != err {
+							go conReq.sendResponse(nil, err)
+						} else {
+							go conReq.sendResponse(qq, nil)
+						}
+						return
+					}
+					delete(cm.clients, *delReq)
+				default:
+					run = false
+				}
+			}
+			qq, err := cl.newQueryQueue()
+			if nil != err {
+				go conReq.sendResponse(nil, err)
+			} else {
+				go conReq.sendResponse(qq, nil)
+			}
+		}()
+	} else {
+		// Set up new client
+		cl = &Client{ConnectionSettings: conReq.ConnectionSettings}
+		qq, err := cl.StartClient()
+		if nil != err {
+			go conReq.sendResponse(nil, err)
+			return
+		}
+		cm.clients[cl.Host] = cl
+		go conReq.sendResponse(qq, nil)
+	}
+
 }

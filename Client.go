@@ -8,22 +8,12 @@ import (
 	"sync"
 )
 
-// Mode can be set to ModeTCP, ModeRTU, or ModeASCII
-type Mode uint8
-
-// The available modbus connection modes
-const (
-	ModeTCP Mode = iota
-	ModeRTU
-	ModeASCII
-)
-
 // Connection holds all connection settings. Connections and Clients are
 // uniquely identified by their Host string. For ModeTCP this is the FQDN or IP
 // address AND the port number. For ModeRTU and ModeASCII the Host string holds
 // the full path to the serial device (Linux) or the name of the COM port
 // (Windows).
-type Connection struct {
+type ConnectionSettings struct {
 	Mode
 	Host string
 	Baud int
@@ -32,32 +22,32 @@ type Connection struct {
 // Client contains the connection settings, the connection handler, and the
 // queryQueue used to listen for queries.
 type Client struct {
-	Connection
+	ConnectionSettings
+	Packager
 
 	mu sync.Mutex
 	wg sync.WaitGroup
 
 	queryQueue  chan *Query
 	newQQSignal chan interface{}
-	packager    Packager
 }
 
 // queryListener executes Queries sent on the queryQueue and sends
 // QueryResponses to the Query's Response channel.
 func (c *Client) queryListener() {
-	defer c.packager.Close()
+	defer c.Close()
 	// Set up client for slave
 	for qry := range c.queryQueue {
 		if nil == qry.Response {
 			fmt.Println("No Query.Response channel set up")
 			continue
 		}
-		err := c.packager.GeneratePacket(qry)
+		err := c.GeneratePacket(qry)
 		if nil != err {
 			go qry.sendResponse(&QueryResponse{Err: err})
 			continue
 		}
-		res, err := c.packager.Send()
+		res, err := c.Send()
 		if nil != err {
 			//Log error
 			go qry.sendResponse(&QueryResponse{Err: err})
@@ -97,13 +87,13 @@ func (c *Client) StartClient() (chan *Query, error) {
 	}
 	switch c.Mode {
 	case ModeTCP:
-		//c.packager = NewTCPPackager(t)
+		//c.Packager = NewTCPPackager(t)
 	case ModeRTU:
-		//c.packager = NewRTUPackager(t)
+		//c.Packager = NewRTUPackager(t)
 	case ModeASCII:
 		p := NewASCIIPackager(t)
 		p.Debug = true
-		c.packager = p
+		c.Packager = p
 	}
 
 	c.queryQueue = make(chan *Query)

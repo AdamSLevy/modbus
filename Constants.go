@@ -8,6 +8,16 @@ import (
 	"errors"
 )
 
+// Mode can be set to ModeTCP, ModeRTU, or ModeASCII
+type Mode uint8
+
+// The available modbus connection modes
+const (
+	ModeTCP Mode = iota
+	ModeRTU
+	ModeASCII
+)
+
 // DefaultPort is the default port number for Modbus TCP
 const (
 	DefaultPort = 502

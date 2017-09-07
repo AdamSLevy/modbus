@@ -40,7 +40,7 @@ func (pkgr *ASCIIPackager) GeneratePacket(qry *Query) error {
 			return errors.New("SlaveID cannot be 0 for Modbus ASCII")
 		}
 	}
-	pkgr.qry = qry
+	pkgr.Query = qry
 	packetLen := 7
 	if len(qry.Data) > 0 {
 		packetLen += len(qry.Data) + 1

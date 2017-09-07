@@ -69,7 +69,7 @@ func TestClientManagerRequestListener(t *testing.T) {
 	}
 
 	req2 := NewConnectionRequest()
-	req2.Connection = req.Connection
+	req2.ConnectionSettings = req.ConnectionSettings
 	cm.SendRequest(req2)
 	select {
 	case res2 = <-req2.Response:
