@@ -12,39 +12,19 @@ import (
 // ASCIIPackager generates packet frames from Queries, sends the packet, and
 // reads and validates the response via the Transporter
 type ASCIIPackager struct {
-	pkt    []byte
-	pktLen int
-
-	qry *Query
-
-	Validate bool
-	Debug    bool
-
-	TimeoutInMilliseconds int
-
-	Transporter
+	PackagerSettings
 }
 
 // NewASCIIPackager initializes a new ASCIIPackager with the given Transporter
 // t.
 func NewASCIIPackager(t Transporter) *ASCIIPackager {
 	return &ASCIIPackager{
-		Transporter: t,
-		Validate:    true,
-		Debug:       false,
+		PackagerSettings{
+			Transporter: t,
+			Validate:    true,
+			Debug:       false,
+		},
 	}
-}
-
-// Modbus ASCII uses Longitudinal Redundancy Check. lrc computes and returns
-// the 2's compliment (-) of the sum of the given byte array modulo 256
-func lrc(data []byte) uint8 {
-	var sum uint8
-	var lrc8 uint8
-	for _, b := range data {
-		sum += b
-	}
-	lrc8 = uint8(-int8(sum))
-	return lrc8
 }
 
 // GeneratePacket generates the bytes of the packet for the given Query after
@@ -56,18 +36,21 @@ func (pkgr *ASCIIPackager) GeneratePacket(qry *Query) error {
 		if !valid {
 			return err
 		}
+		if qry.SlaveID == 0 {
+			return errors.New("SlaveID cannot be 0 for Modbus ASCII")
+		}
 	}
 	pkgr.qry = qry
 	packetLen := 7
 	if len(qry.Data) > 0 {
 		packetLen += len(qry.Data) + 1
-		if packetLen > ASCII_FRAME_MAXSIZE {
+		if packetLen > MaxASCIISize {
 			return errors.New("Query Data is too long")
 		}
 	}
 
 	rawPkt := make([]byte, packetLen)
-	rawPkt[0] = qry.SlaveId
+	rawPkt[0] = qry.SlaveID
 	rawPkt[1] = qry.FunctionCode
 	rawPkt[2] = byte(qry.Address >> 8)    // (High Byte)
 	rawPkt[3] = byte(qry.Address & 0xff)  // (Low Byte)
@@ -124,7 +107,7 @@ func (pkgr *ASCIIPackager) Send() ([]byte, error) {
 	time.Sleep(time.Duration(pkgr.TimeoutInMilliseconds) * time.Millisecond)
 
 	// then attempt to read the reply
-	asciiResponse := make([]byte, ASCII_FRAME_MAXSIZE)
+	asciiResponse := make([]byte, MaxASCIISize)
 	asciiN, rerr := pkgr.Read(asciiResponse)
 	if rerr != nil {
 		if pkgr.Debug {
@@ -141,7 +124,7 @@ func (pkgr *ASCIIPackager) Send() ([]byte, error) {
 			log.Println("ASCII Response Framing Invalid")
 			log.Println(fmt.Sprintf("%s", asciiResponse))
 		}
-		return nil, MODBUS_EXCEPTIONS[EXCEPTION_UNSPECIFIED]
+		return nil, exceptions[exceptionUnspecified]
 	}
 
 	// convert to raw bytes
@@ -150,24 +133,9 @@ func (pkgr *ASCIIPackager) Send() ([]byte, error) {
 	hex.Decode(response, asciiResponse[1:asciiN-2])
 
 	// check the validity of the response
-	if response[0] != pkgr.qry.SlaveId || response[1] != pkgr.qry.FunctionCode {
-		if pkgr.Debug {
-			log.Println("ASCII Response Invalid")
-		}
-		if response[0] == pkgr.qry.SlaveId &&
-			(response[1]&0x7f) == pkgr.qry.FunctionCode {
-			switch response[2] {
-			case EXCEPTION_ILLEGAL_FUNCTION:
-				return nil, MODBUS_EXCEPTIONS[EXCEPTION_ILLEGAL_FUNCTION]
-			case EXCEPTION_DATA_ADDRESS:
-				return nil, MODBUS_EXCEPTIONS[EXCEPTION_DATA_ADDRESS]
-			case EXCEPTION_DATA_VALUE:
-				return nil, MODBUS_EXCEPTIONS[EXCEPTION_DATA_VALUE]
-			case EXCEPTION_SLAVE_DEVICE_FAILURE:
-				return nil, MODBUS_EXCEPTIONS[EXCEPTION_SLAVE_DEVICE_FAILURE]
-			}
-		}
-		return nil, MODBUS_EXCEPTIONS[EXCEPTION_UNSPECIFIED]
+	ok, err := pkgr.isValidResponse(response)
+	if !ok {
+		return nil, err
 	}
 
 	// confirm the checksum (lrc)
@@ -178,9 +146,21 @@ func (pkgr *ASCIIPackager) Send() ([]byte, error) {
 			log.Println("ASCII Response Invalid: Bad Checksum")
 		}
 		// return the response bytes anyway, and let the caller decide
-		return response, MODBUS_EXCEPTIONS[EXCEPTION_BAD_CHECKSUM]
+		return response, exceptions[exceptionBadChecksum]
 	}
 
 	// return only the number of bytes read
-	return response, nil
+	return response[2 : rawN-1], nil
+}
+
+// Modbus ASCII uses Longitudinal Redundancy Check. lrc computes and returns
+// the 2's compliment (-) of the sum of the given byte array modulo 256
+func lrc(data []byte) uint8 {
+	var sum uint8
+	var lrc8 uint8
+	for _, b := range data {
+		sum += b
+	}
+	lrc8 = uint8(-int8(sum))
+	return lrc8
 }

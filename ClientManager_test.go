@@ -25,7 +25,7 @@ func TestClientManagerInitialization(t *testing.T) {
 	}
 }
 
-func TestClientManagerSendRequest(t *testing.T) {
+func TestClientManagerRequestListener(t *testing.T) {
 	cm := GetClientManager()
 	req := NewConnectionRequest()
 
@@ -54,7 +54,7 @@ func TestClientManagerSendRequest(t *testing.T) {
 
 	req.Host = "/dev/pts/3"
 	req.Baud = 19200
-	req.Mode = ModbusModeASCII
+	req.Mode = ModeASCII
 	cm.SendRequest(req)
 
 	var res, res2 *ConnectionResponse

@@ -76,14 +76,14 @@ func (cm *ClientManager) requestListener() {
 					if cl.Connection != conReq.Connection {
 						// Host is in use but other
 						// client details didn't match
-						err := errors.New(fmt.Sprintf("Host '%s' is already "+
-							"in use with different client settings.",
-							cl.Host))
+						err := fmt.Errorf("Host '%s' is already "+
+							"in use with different client "+
+							"settings.", cl.Host)
 						go conReq.sendResponse(nil, err)
 						return
 					}
 
-					var run bool = true
+					var run = true
 					for run {
 						select {
 						case delReq := <-cm.deleteClient:

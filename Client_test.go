@@ -10,7 +10,7 @@ func TestClientQueryListener(t *testing.T) {
 	req := NewConnectionRequest()
 	req.Host = "/dev/pts/3"
 	req.Baud = 19200
-	req.Mode = ModbusModeASCII
+	req.Mode = ModeASCII
 	cm.SendRequest(req)
 
 	res := <-req.Response
@@ -20,8 +20,8 @@ func TestClientQueryListener(t *testing.T) {
 
 	qry := NewQuery()
 
-	qry.FunctionCode = FUNCTION_READ_COILS
-	qry.SlaveId = 1
+	qry.FunctionCode = FunctionReadCoils
+	qry.SlaveID = 1
 	qry.Quantity = 1
 	ch := make(chan interface{})
 	go func() {

@@ -1,5 +1,6 @@
 package modbus
 
+// ConnectionRequest holds Connection settings and a Response channel.
 // ConnectionRequests are sent to ClientManager's runtime to get a
 // ConnectionResponse back on the Response channel containing a QueryQueue that
 // can be used to send asynchronous Modbus Queries to a Client with the

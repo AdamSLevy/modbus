@@ -8,17 +8,23 @@ import (
 	"sync"
 )
 
-// ModbusMode can be set to ModbusModeTCP, ModbusModeRTU, or ModbusModeASCII
-type ModbusMode uint8
+// Mode can be set to ModeTCP, ModeRTU, or ModeASCII
+type Mode uint8
 
+// The available modbus connection modes
 const (
-	ModbusModeTCP ModbusMode = iota
-	ModbusModeRTU
-	ModbusModeASCII
+	ModeTCP Mode = iota
+	ModeRTU
+	ModeASCII
 )
 
+// Connection holds all connection settings. Connections and Clients are
+// uniquely identified by their Host string. For ModeTCP this is the FQDN or IP
+// address AND the port number. For ModeRTU and ModeASCII the Host string holds
+// the full path to the serial device (Linux) or the name of the COM port
+// (Windows).
 type Connection struct {
-	Mode ModbusMode
+	Mode
 	Host string
 	Baud int
 }
@@ -46,7 +52,6 @@ func (c *Client) queryListener() {
 			fmt.Println("No Query.Response channel set up")
 			continue
 		}
-		fmt.Println("Generating packet ...")
 		err := c.packager.GeneratePacket(qry)
 		if nil != err {
 			go qry.sendResponse(&QueryResponse{Err: err})
@@ -68,7 +73,7 @@ func (c *Client) queryListener() {
 func (c *Client) StartClient() (chan *Query, error) {
 	var t Transporter
 	switch c.Mode {
-	case ModbusModeTCP:
+	case ModeTCP:
 		// make sure the server:port combination resolves to a valid TCP address
 		addr, err := net.ResolveTCPAddr("tcp4", c.Host)
 		if err != nil {
@@ -80,9 +85,9 @@ func (c *Client) StartClient() (chan *Query, error) {
 		if err != nil {
 			return nil, err
 		}
-	case ModbusModeRTU:
+	case ModeRTU:
 		fallthrough
-	case ModbusModeASCII:
+	case ModeASCII:
 		conf := &serial.Config{Name: c.Host, Baud: c.Baud}
 		var err error
 		t, err = serial.OpenPort(conf)
@@ -91,11 +96,11 @@ func (c *Client) StartClient() (chan *Query, error) {
 		}
 	}
 	switch c.Mode {
-	case ModbusModeTCP:
+	case ModeTCP:
 		//c.packager = NewTCPPackager(t)
-	case ModbusModeRTU:
+	case ModeRTU:
 		//c.packager = NewRTUPackager(t)
-	case ModbusModeASCII:
+	case ModeASCII:
 		p := NewASCIIPackager(t)
 		p.Debug = true
 		c.packager = p
@@ -107,7 +112,7 @@ func (c *Client) StartClient() (chan *Query, error) {
 
 	qq, _ := c.newQueryQueue()
 	go func() {
-		var run bool = true
+		var run = true
 		for run {
 			c.wg.Wait()
 			c.mu.Lock()
@@ -133,7 +138,7 @@ func (c *Client) StartClient() (chan *Query, error) {
 }
 
 func (c *Client) queryQueueChannelMonitor() {
-	var run bool = true
+	var run = true
 	for run {
 		// Wait until all QueryQueues have signaled Done()
 		c.wg.Wait()
