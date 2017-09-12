@@ -3,6 +3,7 @@ package modbus
 import (
 	"log"
 	"sync"
+	"time"
 )
 
 // ConnectionSettings holds all connection settings. Connections and clients
@@ -12,9 +13,9 @@ import (
 // (Windows).
 type ConnectionSettings struct {
 	Mode
-	Host                  string
-	Baud                  int
-	TimeoutInMilliseconds int
+	Host    string
+	Baud    int
+	Timeout time.Duration
 }
 
 // Client contains the connection settings, the connection handler, and the qq

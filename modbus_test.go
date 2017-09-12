@@ -13,9 +13,9 @@ import (
 )
 
 var conSettings = [...]*ConnectionSettings{
-	{Mode: ModeASCII, Baud: 19200, TimeoutInMilliseconds: 500},
-	{Mode: ModeRTU, Baud: 19200, TimeoutInMilliseconds: 500},
-	{Mode: ModeTCP, Host: "localhost:5020", TimeoutInMilliseconds: 500},
+	{Mode: ModeASCII, Baud: 19200, Timeout: 500 * time.Millisecond},
+	{Mode: ModeRTU, Baud: 19200, Timeout: 500 * time.Millisecond},
+	{Mode: ModeTCP, Host: "localhost:5020", Timeout: 500 * time.Millisecond},
 }
 var modeName = [...]string{
 	"ASCII",
@@ -69,6 +69,17 @@ var diagslaveASCIIArgs = []string{"-m", "ascii", "-a", "1"}
 var diagslaveRTUArgs = []string{"-m", "rtu", "-a", "1"}
 var diagslaveTCPArgs = []string{"-m", "tcp", "-a", "1", "-p", "5020"}
 
+func TestMain(m *testing.M) {
+	for _, cs := range conSettings {
+		cancel := setupModbusServer(cs)
+		defer cancel()
+	}
+	// Give time for the servers to start
+	time.Sleep(50 * time.Millisecond)
+
+	m.Run()
+}
+
 func TestGetClientManager(t *testing.T) {
 	t.Run("Initialization", func(t *testing.T) {
 		t.Parallel()
@@ -92,74 +103,51 @@ func TestGetClientManager(t *testing.T) {
 }
 
 func TestClientManager(t *testing.T) {
-	for _, cs := range conSettings {
-		cancel := setupModbusServer(cs)
-		defer cancel()
-	}
-	// Give time for the servers to start
-	time.Sleep(100 * time.Millisecond)
-
-	t.Run("SendRequest", func(t *testing.T) {
+	t.Run("SetupClient", func(t *testing.T) {
 		for i, cs := range conSettings {
-			req := NewClientRequest()
-			req.ConnectionSettings = *cs
 			t.Run(modeName[i], func(t *testing.T) {
 				t.Parallel()
 				cm := GetClientManager()
-
-				ch := make(chan interface{})
+				ch := make(chan interface{}, 1)
+				var qq chan Query
+				var err error
 				go func() {
-					cm.SendRequest(req)
+					qq, err = cm.SetupClient(*cs)
 					ch <- true
 				}()
-
 				select {
 				case <-ch:
 				case <-time.After(500 * time.Millisecond):
-					t.Fatal("SendRequest timed out")
+					t.Fatal("SetupClient timed out")
 				}
-
-				select {
-				case res := <-req.Response:
-					if nil != res.Err {
-						t.Fatal(res.Err)
-					} else if nil == res.QueryQueue {
-						t.Fatal("QueryQueue is nil")
-					}
-					close(res.QueryQueue)
-				case <-time.After(500 * time.Millisecond):
-					t.Fatal("Response timeout")
+				if nil != err {
+					t.Fatal(err)
+				} else if nil == qq {
+					t.Fatal("Query channel is nil")
 				}
-
+				close(qq)
 			})
 		}
-		req := NewClientRequest()
 		t.Run("invalid", func(t *testing.T) {
 			t.Parallel()
 			cm := GetClientManager()
-
-			ch := make(chan interface{})
+			ch := make(chan interface{}, 1)
+			var qq chan Query
+			var err error
 			go func() {
-				cm.SendRequest(req)
+				qq, err = cm.SetupClient(ConnectionSettings{})
 				ch <- true
 			}()
-
 			select {
 			case <-ch:
 			case <-time.After(500 * time.Millisecond):
-				t.Fatal("SendRequest timed out")
+				t.Fatal("SetupClient timed out")
 			}
-
-			select {
-			case res := <-req.Response:
-				if nil == res.Err {
-					t.Fatal("Did not return and error")
-				}
-				if nil != res.QueryQueue {
-					t.Fatal("QueryQueue is not nil")
-				}
-			case <-time.After(500 * time.Millisecond):
-				t.Fatal("Response timeout")
+			if nil == err {
+				t.Fatal("Did not return an error")
+			}
+			if nil != qq {
+				t.Fatal("Query channel is not nil")
 			}
 		})
 	})
@@ -170,62 +158,50 @@ func TestClientManager(t *testing.T) {
 	}
 }
 
-func TestClient(t *testing.T) {
-	for _, cs := range conSettings {
-		cancel := setupModbusServer(cs)
-		defer cancel()
-	}
-	// Give time for the servers to start
-	time.Sleep(100 * time.Millisecond)
+func TestQueries(t *testing.T) {
+	for i, cs := range conSettings {
+		cs := cs
+		cm := GetClientManager()
+		t.Run(modeName[i], func(t *testing.T) {
+			t.Parallel()
+			for _, q := range queries {
+				q := q
+				t.Run(FunctionNames[q.FunctionCode], func(t *testing.T) {
+					t.Parallel()
+					qq, err := cm.SetupClient(*cs)
+					if nil != err {
+						t.Fatal(err)
+					} else if nil == qq {
+						t.Fatal("Query channel is nil")
+					}
+					q.Response = make(chan QueryResponse)
+					ch := make(chan interface{})
+					go func() {
+						qq <- q
+						ch <- true
+					}()
 
-	t.Run("Query", func(t *testing.T) {
-		for i, cs := range conSettings {
-			cs := cs
-			cm := GetClientManager()
-			t.Run(modeName[i], func(t *testing.T) {
-				t.Parallel()
-				for _, q := range queries {
-					q := q
-					t.Run(FunctionNames[q.FunctionCode], func(t *testing.T) {
-						t.Parallel()
-						req := NewClientRequest()
-						req.ConnectionSettings = *cs
-						cm.SendRequest(req)
-						res := <-req.Response
+					select {
+					case <-ch:
+					case <-time.After(500 * time.Millisecond):
+						t.Fatal("Query timed out")
+					}
+
+					select {
+					case res := <-q.Response:
 						if nil != res.Err {
 							t.Fatal(res.Err)
-						} else if nil == res.QueryQueue {
-							t.Fatal("QueryQueue is nil")
 						}
-						q.Response = make(chan QueryResponse)
-						ch := make(chan interface{})
-						go func() {
-							res.QueryQueue <- q
-							ch <- true
-						}()
-
-						select {
-						case <-ch:
-						case <-time.After(1200 * time.Millisecond):
-							t.Fatal("Query timed out")
+						if nil == res.Data {
+							t.Fatal("Data is nil")
 						}
-
-						select {
-						case res := <-q.Response:
-							if nil != res.Err {
-								t.Fatal(res.Err)
-							}
-							if nil == res.Data {
-								t.Fatal("Data is nil")
-							}
-						case <-time.After(5000 * time.Millisecond):
-							t.Fatal("Response timeout")
-						}
-					})
-				}
-			})
-		}
-	})
+					case <-time.After(500 * time.Millisecond):
+						t.Fatal("Response timeout")
+					}
+				})
+			}
+		})
+	}
 }
 
 func setupModbusServer(cs *ConnectionSettings) context.CancelFunc {

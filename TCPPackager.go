@@ -5,7 +5,7 @@ import (
 	//"errors"
 	"log"
 	"net"
-	//"time"
+	"time"
 )
 
 // TCPPackager generates packet frames from Queries, sends the packet, and
@@ -16,23 +16,21 @@ type TCPPackager struct {
 	net.Conn
 
 	transactionID uint16
+	timeout       time.Duration
 }
 
 // NewTCPPackager initializes a new TCPPackager with the given Transporter t.
 func NewTCPPackager(c ConnectionSettings) (*TCPPackager, error) {
-	// make sure the server:port combination resolves to a valid TCP address
-	addr, err := net.ResolveTCPAddr("tcp4", c.Host)
-	if err != nil {
-		return nil, err
-	}
-
 	// attempt to connect to the slave device (server)
-	conn, err := net.DialTCP("tcp", nil, addr)
+	conn, err := net.DialTimeout("tcp", c.Host, c.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	conn.SetKeepAlive(true)
-	return &TCPPackager{Conn: conn, SetAndValidateTransactionID: true}, nil
+	return &TCPPackager{
+		Conn: conn,
+		SetAndValidateTransactionID: true,
+		timeout:                     c.Timeout,
+	}, nil
 }
 
 // GeneratePacket is a method corresponding to a TCPFrame object which
@@ -76,7 +74,7 @@ func (pkgr *TCPPackager) Send() ([]byte, error) {
 		log.Printf("Tx: %x\n", pkgr.adu)
 	}
 
-	//pkgr.SetDeadline(time.Now().Add( time.Duration(pkgr.TimeoutInMilliseconds) * time.Millisecond))
+	pkgr.SetDeadline(time.Now().Add(pkgr.timeout))
 
 	// transmit the ADU
 	_, err := pkgr.Write(pkgr.adu)

@@ -1,56 +1,69 @@
 package modbus
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"sync"
 )
 
-// ClientRequests are sent to ClientManager to get access to a Client.
-type ClientRequest struct {
+// clientRequests are sent to ClientManager to get access to a Client.
+type clientRequest struct {
 	ConnectionSettings
-	Response chan *ClientResponse
+	response chan *clientResponse
 }
 
-// NewClientRequest initializes a new ClientRequest with a ClientResponse
+// newClientRequest initializes a new clientRequest with a clientResponse
 // channel.
-func NewClientRequest() *ClientRequest {
-	return &ClientRequest{Response: make(chan *ClientResponse)}
+func newClientRequest(cs ConnectionSettings) *clientRequest {
+	return &clientRequest{
+		ConnectionSettings: cs,
+		response:           make(chan *clientResponse),
+	}
 }
 
 // sendResponse is a convenience function used by clientManager's runtime to
-// return a ClientResponse for a ClientRequest.
-func (req *ClientRequest) sendResponse(q chan Query, err error) {
-	req.Response <- &ClientResponse{
+// return a clientResponse for a clientRequest.
+func (req *clientRequest) sendResponse(q chan Query, err error) {
+	req.response <- &clientResponse{
 		QueryQueue: q,
 		Err:        err,
 	}
 }
 
-// ClientResponse is returned with a valid Query channel
-type ClientResponse struct {
+// clientResponse is returned by clientManager's runtime with an initialized
+// Query channel, QueryQueue, if the corresponding clientRequest was
+// successful. Otherwise the error, Err, is set.
+type clientResponse struct {
 	QueryQueue chan Query
 	Err        error
 }
 
+// ClientManager is a singleton object that uniquely sets up Clients based on
+// clientRequests and returns a unique channel for sending Queries to the
+// Client encapsulated in a clientResponse. Clients are uniquely hashed by
+// their ConnectionSettings.Host string and all additional ConnectionSettings
+// must also match for clientRequests for existing Clients to be successful.
 type ClientManager interface {
-	SendRequest(req *ClientRequest) error
+	SetupClient(cs ConnectionSettings) (chan Query, error)
 }
 
+// clientManager is the underlying concrete type implementing ClientManager.
 type clientManager struct {
-	newClient    chan *ClientRequest
+	newClient    chan *clientRequest
 	deleteClient chan *string
 	clients      map[string]*Client
 }
 
+// clntMngr is the pointer to the clientManager singleton instance
 var clntMngr *clientManager
 var once sync.Once
 
+// GetClientManager sets up the clientManager singleton once and returns the
+// ClientManager interface.
 func GetClientManager() ClientManager {
 	once.Do(func() {
 		clntMngr = &clientManager{
-			newClient:    make(chan *ClientRequest),
+			newClient:    make(chan *clientRequest),
 			deleteClient: make(chan *string),
 			clients:      make(map[string]*Client),
 		}
@@ -61,12 +74,11 @@ func GetClientManager() ClientManager {
 	return clntMngr
 }
 
-func (cm *clientManager) SendRequest(req *ClientRequest) error {
-	if nil == cm.newClient {
-		return errors.New("Uninitialized ClientManager")
-	}
+func (cm *clientManager) SetupClient(cs ConnectionSettings) (chan Query, error) {
+	req := newClientRequest(cs)
 	cm.newClient <- req
-	return nil
+	res := <-req.response
+	return res.QueryQueue, res.Err
 }
 
 func (cm *clientManager) requestListener() {
@@ -80,26 +92,23 @@ func (cm *clientManager) requestListener() {
 	}
 }
 
-func (cm *clientManager) handleClientRequest(conReq *ClientRequest) {
-	if nil == conReq.Response {
-		return
-	}
-	con, ok := cm.clients[conReq.Host]
+func (cm *clientManager) handleClientRequest(clReq *clientRequest) {
+	cl, ok := cm.clients[clReq.Host]
 	if ok {
 		func() {
-			con.wg.Add(1)
-			defer con.wg.Add(-1)
-			con.mu.Lock()
-			defer con.mu.Unlock()
+			cl.wg.Add(1)
+			defer cl.wg.Add(-1)
+			cl.mu.Lock()
+			defer cl.mu.Unlock()
 
-			if con.ConnectionSettings !=
-				conReq.ConnectionSettings {
+			if cl.ConnectionSettings !=
+				clReq.ConnectionSettings {
 				// Host is in use but other
 				// ConnectionSettings details didn't match
 				err := fmt.Errorf("Host '%s' is already "+
 					"in use with different connection "+
-					"settings.", con.Host)
-				go conReq.sendResponse(nil, err)
+					"settings.", cl.Host)
+				go clReq.sendResponse(nil, err)
 				return
 			}
 
@@ -107,13 +116,13 @@ func (cm *clientManager) handleClientRequest(conReq *ClientRequest) {
 			for run {
 				select {
 				case delReq := <-cm.deleteClient:
-					if *delReq == con.Host {
+					if *delReq == cl.Host {
 						// Restart Client
-						qq, err := con.Start()
+						qq, err := cl.Start()
 						if nil != err {
-							go conReq.sendResponse(nil, err)
+							go clReq.sendResponse(nil, err)
 						} else {
-							go conReq.sendResponse(qq, nil)
+							go clReq.sendResponse(qq, nil)
 						}
 						return
 					}
@@ -122,24 +131,24 @@ func (cm *clientManager) handleClientRequest(conReq *ClientRequest) {
 					run = false
 				}
 			}
-			qq := con.newQueryQueue()
+			qq := cl.newQueryQueue()
 			if nil == qq {
 				log.Fatal("Client is not running")
 			} else {
-				go conReq.sendResponse(qq, nil)
+				go clReq.sendResponse(qq, nil)
 			}
 		}()
 	} else {
 		// Set up new client
-		con = &Client{ConnectionSettings: conReq.ConnectionSettings}
-		con.isManagedClient = true
-		qq, err := con.Start()
+		cl = &Client{ConnectionSettings: clReq.ConnectionSettings}
+		cl.isManagedClient = true
+		qq, err := cl.Start()
 		if nil != err {
-			go conReq.sendResponse(nil, err)
+			go clReq.sendResponse(nil, err)
 			return
 		}
-		cm.clients[con.Host] = con
-		go conReq.sendResponse(qq, nil)
+		cm.clients[cl.Host] = cl
+		go clReq.sendResponse(qq, nil)
 	}
 
 }

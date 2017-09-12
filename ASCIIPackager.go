@@ -6,7 +6,6 @@ import (
 	"errors"
 	"github.com/tarm/serial"
 	"log"
-	"time"
 )
 
 // ASCIIPackager generates packet frames from Queries, sends the packet, and
@@ -28,7 +27,7 @@ func NewSerialPort(c ConnectionSettings) (*serial.Port, error) {
 	conf := &serial.Config{
 		Name:        c.Host,
 		Baud:        c.Baud,
-		ReadTimeout: time.Duration(c.TimeoutInMilliseconds) * time.Millisecond,
+		ReadTimeout: c.Timeout,
 	}
 	return serial.OpenPort(conf)
 }
