@@ -141,11 +141,11 @@ func (q *Query) ReadInputRegisters(address, quantity uint16) (bool, error) {
 //  Output address        : 2 bytes
 //  Output value          : 2 bytes
 func (q *Query) WriteSingleCoil(address uint16, value bool) (bool, error) {
-	var value_data uint16
+	var valueData uint16
 	if value {
-		value_data = 0xFF00
+		valueData = 0xFF00
 	}
-	return q.WriteSingleFunction(FunctionWriteSingleCoil, address, value_data)
+	return q.WriteSingleFunction(FunctionWriteSingleCoil, address, valueData)
 }
 
 // Request:

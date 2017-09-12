@@ -13,9 +13,9 @@ import (
 )
 
 var conSettings = [...]*ConnectionSettings{
-	{Mode: ModeASCII, Baud: 19200, TimeoutInMilliseconds: 1000},
-	{Mode: ModeRTU, Baud: 19200, TimeoutInMilliseconds: 1000},
-	{Mode: ModeTCP, Host: "localhost:5020", TimeoutInMilliseconds: 3000},
+	{Mode: ModeASCII, Baud: 19200, TimeoutInMilliseconds: 500},
+	{Mode: ModeRTU, Baud: 19200, TimeoutInMilliseconds: 500},
+	{Mode: ModeTCP, Host: "localhost:5020", TimeoutInMilliseconds: 500},
 }
 var modeName = [...]string{
 	"ASCII",
@@ -27,7 +27,7 @@ var queries []Query
 
 func init() {
 	queries = make([]Query, 9)
-	for i, _ := range queries {
+	for i := range queries {
 		queries[i].SlaveID = 1
 	}
 	values := make([]byte, 4)
@@ -69,36 +69,29 @@ var diagslaveASCIIArgs = []string{"-m", "ascii", "-a", "1"}
 var diagslaveRTUArgs = []string{"-m", "rtu", "-a", "1"}
 var diagslaveTCPArgs = []string{"-m", "tcp", "-a", "1", "-p", "5020"}
 
-func TestModbus(t *testing.T) {
-	t.Run("GetConnectionManager()", func(t *testing.T) {
-		cm := GetConnectionManager()
-		t.Run("Initialization", func(t *testing.T) {
-			t.Parallel()
-			if nil == cm {
-				t.Fatal("GetConnectionManager() returned nil")
-			}
-			if nil == cm.connections ||
-				nil == cm.newConnection ||
-				nil == cm.deleteClient {
-				t.Fatal("ConnectionManager was not properly initialized")
-			}
-		})
-		if t.Failed() {
-			t.FailNow()
+func TestGetConnectionManager(t *testing.T) {
+	cm := GetConnectionManager()
+	t.Run("Initialization", func(t *testing.T) {
+		t.Parallel()
+		if nil == cm {
+			t.Fatal("GetConnectionManager() returned nil")
 		}
-		t.Run("Singleton", func(t *testing.T) {
-			t.Parallel()
-			if cm != GetConnectionManager() {
-				t.Fatal("GetConnectionManager() returned two different " +
-					"pointers")
-			}
-		})
-
+		if nil == cm.connections ||
+			nil == cm.newConnection ||
+			nil == cm.deleteClient {
+			t.Fatal("ConnectionManager was not properly initialized")
+		}
 	})
-	if t.Failed() {
-		t.FailNow()
-	}
+	t.Run("Singleton", func(t *testing.T) {
+		t.Parallel()
+		if cm != GetConnectionManager() {
+			t.Fatal("GetConnectionManager() returned two different " +
+				"pointers")
+		}
+	})
+}
 
+func TestConnectionManager(t *testing.T) {
 	for _, cs := range conSettings {
 		cancel := setupModbusServer(cs)
 		defer cancel()
@@ -106,7 +99,7 @@ func TestModbus(t *testing.T) {
 	// Give time for the servers to start
 	time.Sleep(100 * time.Millisecond)
 
-	t.Run("ConnectionRequest", func(t *testing.T) {
+	t.Run("SendRequest", func(t *testing.T) {
 		for i, cs := range conSettings {
 			req := NewConnectionRequest()
 			req.ConnectionSettings = *cs
@@ -170,12 +163,20 @@ func TestModbus(t *testing.T) {
 			}
 		})
 	})
-
 	// Give time for the clients to shutdown
 	time.Sleep(10 * time.Millisecond)
 	if len(connectionManager.connections) > 0 {
 		t.Fatal("Connections did not shutdown on close")
 	}
+}
+
+func TestConnection(t *testing.T) {
+	for _, cs := range conSettings {
+		cancel := setupModbusServer(cs)
+		defer cancel()
+	}
+	// Give time for the servers to start
+	time.Sleep(100 * time.Millisecond)
 
 	t.Run("Query", func(t *testing.T) {
 		for i, cs := range conSettings {
@@ -278,8 +279,8 @@ func setupModbusServer(cs *ConnectionSettings) context.CancelFunc {
 
 	diagslave := exec.CommandContext(ctx, diagslaveCmd, diagslaveArgs...)
 	//if cs.Mode == ModeTCP {
-	//	diagslave.Stdout = os.Stdout
-	//	diagslave.Stderr = os.Stderr
+	//diagslave.Stdout = os.Stdout
+	//diagslave.Stderr = os.Stderr
 	//}
 	if err := diagslave.Start(); err != nil {
 		log.Fatal(err)
