@@ -19,10 +19,10 @@ type ConnectionSettings struct {
 	TimeoutInMilliseconds int
 }
 
-// Connection contains the connection settings, the connection handler, and the qq
+// Client contains the connection settings, the connection handler, and the qq
 // used to listen for queries.
-type Connection struct {
-	isManagedConnection bool
+type Client struct {
+	isManagedClient bool
 	ConnectionSettings
 	Packager
 
@@ -35,7 +35,7 @@ type Connection struct {
 
 // queryListener executes Queries sent on the qq and sends QueryResponses to
 // the Query's Response channel.
-func (c *Connection) queryListener() {
+func (c *Client) queryListener() {
 	defer c.Close()
 	// Set up connection for slave
 	for qry := range c.qq {
@@ -55,8 +55,8 @@ func (c *Connection) queryListener() {
 }
 
 // start sets up the appropriate transporter and packager and if
-// successful, creates the qq channel and starts the Connection's goroutine.
-func (c *Connection) Start() (QueryQueue, error) {
+// successful, creates the qq channel and starts the Client's goroutine.
+func (c *Client) Start() (QueryQueue, error) {
 	switch c.Mode {
 	case ModeTCP:
 		p, err := NewTCPPackager(c.ConnectionSettings)
@@ -99,8 +99,8 @@ func (c *Connection) Start() (QueryQueue, error) {
 				run = false
 			}
 		}
-		if c.isManagedConnection {
-			GetConnectionManager().deleteClient <- &c.Host
+		if c.isManagedClient {
+			GetClientManager().deleteClient <- &c.Host
 		}
 		close(c.qq)
 		close(c.newQQSignal)
@@ -111,7 +111,7 @@ func (c *Connection) Start() (QueryQueue, error) {
 	return qq, nil
 }
 
-func (c *Connection) queryQueueChannelMonitor() {
+func (c *Client) queryQueueChannelMonitor() {
 	var run = true
 	for run {
 		// Wait until all QueryQueues have signaled Done()
@@ -131,8 +131,8 @@ func (c *Connection) queryQueueChannelMonitor() {
 			run = false
 		}
 	}
-	if c.isManagedConnection {
-		GetConnectionManager().deleteClient <- &c.Host
+	if c.isManagedClient {
+		GetClientManager().deleteClient <- &c.Host
 	}
 	close(c.qq)
 	close(c.newQQSignal)
@@ -146,7 +146,7 @@ func (c *Connection) queryQueueChannelMonitor() {
 // sends queries to the connection needs their own QueryQueue if they are to be
 // allowed to close the channel. connections with no remaining open channels shut
 // themselves down.
-func (c *Connection) newQueryQueue() QueryQueue {
+func (c *Client) newQueryQueue() QueryQueue {
 	if nil == c.qq {
 		log.Fatal("Client is not running")
 	}
@@ -158,7 +158,7 @@ func (c *Connection) newQueryQueue() QueryQueue {
 	// the forwarding goroutine exits on channel close. This allows the
 	// queryQueueChannelMonitor to avoid a race condition between shutting
 	// down the connection due to all channels closing and another goroutine,
-	// such as the the ConnectionManager's requestListener, setting up a new
+	// such as the the ClientManager's requestListener, setting up a new
 	// QueryQueue channel.
 	go func() {
 		c.newQQSignal <- true

@@ -69,29 +69,29 @@ var diagslaveASCIIArgs = []string{"-m", "ascii", "-a", "1"}
 var diagslaveRTUArgs = []string{"-m", "rtu", "-a", "1"}
 var diagslaveTCPArgs = []string{"-m", "tcp", "-a", "1", "-p", "5020"}
 
-func TestGetConnectionManager(t *testing.T) {
-	cm := GetConnectionManager()
+func TestGetClientManager(t *testing.T) {
+	cm := GetClientManager()
 	t.Run("Initialization", func(t *testing.T) {
 		t.Parallel()
 		if nil == cm {
-			t.Fatal("GetConnectionManager() returned nil")
+			t.Fatal("GetClientManager() returned nil")
 		}
-		if nil == cm.connections ||
-			nil == cm.newConnection ||
+		if nil == cm.clients ||
+			nil == cm.newClient ||
 			nil == cm.deleteClient {
-			t.Fatal("ConnectionManager was not properly initialized")
+			t.Fatal("ClientManager was not properly initialized")
 		}
 	})
 	t.Run("Singleton", func(t *testing.T) {
 		t.Parallel()
-		if cm != GetConnectionManager() {
-			t.Fatal("GetConnectionManager() returned two different " +
+		if cm != GetClientManager() {
+			t.Fatal("GetClientManager() returned two different " +
 				"pointers")
 		}
 	})
 }
 
-func TestConnectionManager(t *testing.T) {
+func TestClientManager(t *testing.T) {
 	for _, cs := range conSettings {
 		cancel := setupModbusServer(cs)
 		defer cancel()
@@ -101,11 +101,11 @@ func TestConnectionManager(t *testing.T) {
 
 	t.Run("SendRequest", func(t *testing.T) {
 		for i, cs := range conSettings {
-			req := NewConnectionRequest()
+			req := NewClientRequest()
 			req.ConnectionSettings = *cs
 			t.Run(modeName[i], func(t *testing.T) {
 				t.Parallel()
-				cm := GetConnectionManager()
+				cm := GetClientManager()
 
 				ch := make(chan interface{})
 				go func() {
@@ -133,10 +133,10 @@ func TestConnectionManager(t *testing.T) {
 
 			})
 		}
-		req := NewConnectionRequest()
+		req := NewClientRequest()
 		t.Run("invalid", func(t *testing.T) {
 			t.Parallel()
-			cm := GetConnectionManager()
+			cm := GetClientManager()
 
 			ch := make(chan interface{})
 			go func() {
@@ -165,12 +165,12 @@ func TestConnectionManager(t *testing.T) {
 	})
 	// Give time for the clients to shutdown
 	time.Sleep(10 * time.Millisecond)
-	if len(connectionManager.connections) > 0 {
-		t.Fatal("Connections did not shutdown on close")
+	if len(clientManager.clients) > 0 {
+		t.Fatal("Clients did not shutdown on close")
 	}
 }
 
-func TestConnection(t *testing.T) {
+func TestClient(t *testing.T) {
 	for _, cs := range conSettings {
 		cancel := setupModbusServer(cs)
 		defer cancel()
@@ -181,14 +181,14 @@ func TestConnection(t *testing.T) {
 	t.Run("Query", func(t *testing.T) {
 		for i, cs := range conSettings {
 			cs := cs
-			cm := GetConnectionManager()
+			cm := GetClientManager()
 			t.Run(modeName[i], func(t *testing.T) {
 				t.Parallel()
 				for _, q := range queries {
 					q := q
 					t.Run(FunctionNames[q.FunctionCode], func(t *testing.T) {
 						t.Parallel()
-						req := NewConnectionRequest()
+						req := NewClientRequest()
 						req.ConnectionSettings = *cs
 						cm.SendRequest(req)
 						res := <-req.Response
