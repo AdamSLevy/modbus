@@ -70,21 +70,21 @@ var diagslaveRTUArgs = []string{"-m", "rtu", "-a", "1"}
 var diagslaveTCPArgs = []string{"-m", "tcp", "-a", "1", "-p", "5020"}
 
 func TestGetClientManager(t *testing.T) {
-	cm := GetClientManager()
 	t.Run("Initialization", func(t *testing.T) {
 		t.Parallel()
-		if nil == cm {
-			t.Fatal("GetClientManager() returned nil")
-		}
-		if nil == cm.clients ||
-			nil == cm.newClient ||
-			nil == cm.deleteClient {
+		GetClientManager()
+		if nil == clntMngr.clients ||
+			nil == clntMngr.newClient ||
+			nil == clntMngr.deleteClient {
 			t.Fatal("ClientManager was not properly initialized")
 		}
 	})
 	t.Run("Singleton", func(t *testing.T) {
 		t.Parallel()
-		if cm != GetClientManager() {
+		GetClientManager()
+		cm := clntMngr
+		GetClientManager()
+		if cm != clntMngr {
 			t.Fatal("GetClientManager() returned two different " +
 				"pointers")
 		}
@@ -165,7 +165,7 @@ func TestClientManager(t *testing.T) {
 	})
 	// Give time for the clients to shutdown
 	time.Sleep(10 * time.Millisecond)
-	if len(clientManager.clients) > 0 {
+	if len(clntMngr.clients) > 0 {
 		t.Fatal("Clients did not shutdown on close")
 	}
 }

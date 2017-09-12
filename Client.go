@@ -5,8 +5,6 @@ import (
 	"sync"
 )
 
-type QueryQueue chan Query
-
 // ConnectionSettings holds all connection settings. Connections and clients
 // are uniquely identified by their Host string. For ModeTCP this is the FQDN
 // or IP address AND the port number. For ModeRTU and ModeASCII the Host string
@@ -29,7 +27,7 @@ type Client struct {
 	mu sync.Mutex
 	wg sync.WaitGroup
 
-	qq          QueryQueue
+	qq          chan Query
 	newQQSignal chan interface{}
 }
 
@@ -56,7 +54,7 @@ func (c *Client) queryListener() {
 
 // start sets up the appropriate transporter and packager and if
 // successful, creates the qq channel and starts the Client's goroutine.
-func (c *Client) Start() (QueryQueue, error) {
+func (c *Client) Start() (chan Query, error) {
 	switch c.Mode {
 	case ModeTCP:
 		p, err := NewTCPPackager(c.ConnectionSettings)
@@ -78,7 +76,7 @@ func (c *Client) Start() (QueryQueue, error) {
 		c.Packager = p
 	}
 
-	c.qq = make(QueryQueue)
+	c.qq = make(chan Query)
 	c.newQQSignal = make(chan interface{})
 	go c.queryListener()
 
@@ -100,7 +98,7 @@ func (c *Client) Start() (QueryQueue, error) {
 			}
 		}
 		if c.isManagedClient {
-			GetClientManager().deleteClient <- &c.Host
+			clntMngr.deleteClient <- &c.Host
 		}
 		close(c.qq)
 		close(c.newQQSignal)
@@ -114,10 +112,10 @@ func (c *Client) Start() (QueryQueue, error) {
 func (c *Client) queryQueueChannelMonitor() {
 	var run = true
 	for run {
-		// Wait until all QueryQueues have signaled Done()
+		// Wait until all QueryQueue channels have signaled Done()
 		c.wg.Wait()
 		c.mu.Lock()
-		// This is a check for any QueryQueues that may have been created
+		// This is a check for any QueryQueue channels that may have been created
 		// between Wait() returning and acquiring the Lock().
 		select {
 		case <-c.newQQSignal:
@@ -132,7 +130,7 @@ func (c *Client) queryQueueChannelMonitor() {
 		}
 	}
 	if c.isManagedClient {
-		GetClientManager().deleteClient <- &c.Host
+		clntMngr.deleteClient <- &c.Host
 	}
 	close(c.qq)
 	close(c.newQQSignal)
@@ -146,20 +144,20 @@ func (c *Client) queryQueueChannelMonitor() {
 // sends queries to the connection needs their own QueryQueue if they are to be
 // allowed to close the channel. connections with no remaining open channels shut
 // themselves down.
-func (c *Client) newQueryQueue() QueryQueue {
+func (c *Client) newQueryQueue() chan Query {
 	if nil == c.qq {
 		log.Fatal("Client is not running")
 	}
 	// This watch group tracks the number of open channels
 	c.wg.Add(1)
-	qq := make(QueryQueue)
+	qq := make(chan Query)
 
 	// This goroutine sends a blocking newQQSignal which is cleared when
 	// the forwarding goroutine exits on channel close. This allows the
 	// queryQueueChannelMonitor to avoid a race condition between shutting
 	// down the connection due to all channels closing and another goroutine,
 	// such as the the ClientManager's requestListener, setting up a new
-	// QueryQueue channel.
+	// Query channel.
 	go func() {
 		c.newQQSignal <- true
 	}()

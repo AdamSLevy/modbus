@@ -7,80 +7,61 @@ import (
 	"sync"
 )
 
-// ClientRequest holds Connection settings and a Response channel.
-// ClientRequests are sent to ClientManager's runtime to get a
-// ClientResponse back on the Response channel containing a QueryQueue that
-// can be used to send asynchronous Modbus Queries to a Client with the
-// specified Client. Upon receiving a ClientRequest the ClientManager
-// checks if a Client with the same Client.Host name already exists. If an
-// existing Client is found, all other ConnectionSettings must match for a
-// successful ClientResponse. If no such Client is found, a new Client is
-// created if the Client is set up successfully. A ClientResponse will
-// always be returned to the caller on the Response channel with either a
-// QueryQueue channel or an error.
+// ClientRequests are sent to ClientManager to get access to a Client.
 type ClientRequest struct {
 	ConnectionSettings
 	Response chan *ClientResponse
 }
 
-// NewClientRequest creates a new ClientRequest with an initialized
-// Response channel. User must then set the Client settings directly.
+// NewClientRequest initializes a new ClientRequest with a ClientResponse
+// channel.
 func NewClientRequest() *ClientRequest {
-	return &ClientRequest{
-		Response: make(chan *ClientResponse),
-	}
+	return &ClientRequest{Response: make(chan *ClientResponse)}
 }
 
-// sendResponse is a convenience function for sending a ClientResponse.
-func (req *ClientRequest) sendResponse(q QueryQueue, err error) {
+// sendResponse is a convenience function used by clientManager's runtime to
+// return a ClientResponse for a ClientRequest.
+func (req *ClientRequest) sendResponse(q chan Query, err error) {
 	req.Response <- &ClientResponse{
 		QueryQueue: q,
 		Err:        err,
 	}
 }
 
-// ClientResponse is returned on the Response channel of a previously sent
-// ClientRequest. On success, Err is nil and the QueryQueue channel can be
-// used to send Queries to a Client with the requested ConnectionSettings.
+// ClientResponse is returned with a valid Query channel
 type ClientResponse struct {
-	QueryQueue
-	Err error
+	QueryQueue chan Query
+	Err        error
 }
 
-// ClientManager is a singleton object that keeps track of clients
-// globally for the entire program. Use GetClientManager() to get a pointer
-// to the global ClientManager singleton. Clients are hashed on their Host
-// field. Clients are set up and accessed by sending ClientRequests to the
-// ClientManager goroutine using SendRequest().
-type ClientManager struct {
+type ClientManager interface {
+	SendRequest(req *ClientRequest) error
+}
+
+type clientManager struct {
 	newClient    chan *ClientRequest
 	deleteClient chan *string
 	clients      map[string]*Client
 }
 
-var clientManager *ClientManager
+var clntMngr *clientManager
 var once sync.Once
 
-// GetClientManager returns a pointer to the singleton instance of
-// ClientManager, initializing and starting the ClientManager goroutine
-// if necessary.
-func GetClientManager() *ClientManager {
+func GetClientManager() ClientManager {
 	once.Do(func() {
-		clientManager = &ClientManager{
+		clntMngr = &clientManager{
 			newClient:    make(chan *ClientRequest),
 			deleteClient: make(chan *string),
 			clients:      make(map[string]*Client),
 		}
 
-		go clientManager.requestListener()
+		go clntMngr.requestListener()
 	})
 
-	return clientManager
+	return clntMngr
 }
 
-// SendRequest sends a ClientRequest to the ClientManager runtime. The
-// caller should expect a ClientResponse on the Response channel.
-func (cm *ClientManager) SendRequest(req *ClientRequest) error {
+func (cm *clientManager) SendRequest(req *ClientRequest) error {
 	if nil == cm.newClient {
 		return errors.New("Uninitialized ClientManager")
 	}
@@ -88,13 +69,7 @@ func (cm *ClientManager) SendRequest(req *ClientRequest) error {
 	return nil
 }
 
-// requestListener serializes access to the ClientManager's clients map by
-// listening for incoming ClientRequests and delete requests.
-// ClientRequests will set up a client if necessary and send back a
-// ClientResponse containing a QueryQueue for the client if successful.
-// Delete requests are simply a string containing the Host name of the Client.
-// Delete requests are only sent by a
-func (cm *ClientManager) requestListener() {
+func (cm *clientManager) requestListener() {
 	for {
 		select {
 		case delReq := <-cm.deleteClient:
@@ -105,15 +80,7 @@ func (cm *ClientManager) requestListener() {
 	}
 }
 
-// handleClientRequest
-// requestListener listens for incoming ClientRequests and sends a
-// ClientResponse to the ClientRequest.Response channel. On success,
-// the ClientResponse has a valid QueryQueue channel for sending queries to
-// the requested client. On failure, ClientResponse.Error is set.
-// Failure will occur if the client fails or if a client for the
-// requested Host already exists with different settings. Existing clients
-// can only be requested if all ConnectionSettings match exactly.
-func (cm *ClientManager) handleClientRequest(conReq *ClientRequest) {
+func (cm *clientManager) handleClientRequest(conReq *ClientRequest) {
 	if nil == conReq.Response {
 		return
 	}
