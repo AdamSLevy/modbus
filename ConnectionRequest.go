@@ -25,7 +25,7 @@ func NewConnectionRequest() *ConnectionRequest {
 }
 
 // sendResponse is a convenience function for sending a ClientResponse.
-func (req *ConnectionRequest) sendResponse(q chan *Query, err error) {
+func (req *ConnectionRequest) sendResponse(q QueryQueue, err error) {
 	req.Response <- &ConnectionResponse{
 		QueryQueue: q,
 		Err:        err,
@@ -36,6 +36,6 @@ func (req *ConnectionRequest) sendResponse(q chan *Query, err error) {
 // ConnectionRequest. On success, Err is nil and the QueryQueue channel can be
 // used to send Queries to a Client with the requested Connection.
 type ConnectionResponse struct {
-	QueryQueue chan *Query
-	Err        error
+	QueryQueue
+	Err error
 }

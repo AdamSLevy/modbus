@@ -3,18 +3,19 @@ package modbus
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 )
 
-// ConnectionManager is a singleton object that keeps track of clients
+// ConnectionManager is a singleton object that keeps track of connections
 // globally for the entire program. Use GetConnectionManager() to get a pointer
-// to the global ConnectionManager singleton. Clients are hashed on their
-// Host field. Clients are set up and accessed by sending
-// ClientRequests to the ConnectionManager goroutine using SendRequest().
+// to the global ConnectionManager singleton. Clients are hashed on their Host
+// field. Clients are set up and accessed by sending ClientRequests to the
+// ConnectionManager goroutine using SendRequest().
 type ConnectionManager struct {
 	newConnection chan *ConnectionRequest
 	deleteClient  chan *string
-	clients       map[string]*client
+	connections   map[string]*Connection
 }
 
 var connectionManager *ConnectionManager
@@ -28,7 +29,7 @@ func GetConnectionManager() *ConnectionManager {
 		connectionManager = &ConnectionManager{
 			newConnection: make(chan *ConnectionRequest),
 			deleteClient:  make(chan *string),
-			clients:       make(map[string]*client),
+			connections:   make(map[string]*Connection),
 		}
 
 		go connectionManager.requestListener()
@@ -47,17 +48,17 @@ func (cm *ConnectionManager) SendRequest(req *ConnectionRequest) error {
 	return nil
 }
 
-// requestListener serializes access to the ConnectionManager's clients map by
+// requestListener serializes access to the ConnectionManager's connections map by
 // listening for incoming ConnectionRequests and delete requests.
-// ConnectionRequests will set up a client if necessary and send back a
-// ConnectionResponse containing a QueryQueue for the client if successful.
+// ConnectionRequests will set up a connection if necessary and send back a
+// ConnectionResponse containing a QueryQueue for the connection if successful.
 // Delete requests are simply a string containing the Host name of the Client.
 // Delete requests are only sent by a
 func (cm *ConnectionManager) requestListener() {
 	for {
 		select {
 		case delReq := <-cm.deleteClient:
-			delete(cm.clients, *delReq)
+			delete(cm.connections, *delReq)
 		case conReq := <-cm.newConnection:
 			cm.handleConnectionRequest(conReq)
 		}
@@ -68,29 +69,29 @@ func (cm *ConnectionManager) requestListener() {
 // requestListener listens for incoming ConnectionRequests and sends a
 // ConnectionResponse to the ConnectionRequest.Response channel. On success,
 // the ConnectionResponse has a valid QueryQueue channel for sending queries to
-// the requested client. On failure, ConnectionResponse.Error is set.
-// Failure will occur if the client fails or if a client for the
-// requested Host already exists with different settings. Existing clients
+// the requested connection. On failure, ConnectionResponse.Error is set.
+// Failure will occur if the connection fails or if a connection for the
+// requested Host already exists with different settings. Existing connections
 // can only be requested if all settings match exactly.
 func (cm *ConnectionManager) handleConnectionRequest(conReq *ConnectionRequest) {
 	if nil == conReq.Response {
 		return
 	}
-	cl, ok := cm.clients[conReq.Host]
+	con, ok := cm.connections[conReq.Host]
 	if ok {
 		func() {
-			cl.wg.Add(1)
-			defer cl.wg.Add(-1)
-			cl.mu.Lock()
-			defer cl.mu.Unlock()
+			con.wg.Add(1)
+			defer con.wg.Add(-1)
+			con.mu.Lock()
+			defer con.mu.Unlock()
 
-			if cl.ConnectionSettings !=
+			if con.ConnectionSettings !=
 				conReq.ConnectionSettings {
 				// Host is in use but other
-				// client details didn't match
+				// connection details didn't match
 				err := fmt.Errorf("Host '%s' is already "+
-					"in use with different client "+
-					"settings.", cl.Host)
+					"in use with different connection "+
+					"settings.", con.Host)
 				go conReq.sendResponse(nil, err)
 				return
 			}
@@ -99,9 +100,9 @@ func (cm *ConnectionManager) handleConnectionRequest(conReq *ConnectionRequest) 
 			for run {
 				select {
 				case delReq := <-cm.deleteClient:
-					if *delReq == cl.Host {
+					if *delReq == con.Host {
 						// Restart Client
-						qq, err := cl.startClient()
+						qq, err := con.Start()
 						if nil != err {
 							go conReq.sendResponse(nil, err)
 						} else {
@@ -109,27 +110,28 @@ func (cm *ConnectionManager) handleConnectionRequest(conReq *ConnectionRequest) 
 						}
 						return
 					}
-					delete(cm.clients, *delReq)
+					delete(cm.connections, *delReq)
 				default:
 					run = false
 				}
 			}
-			qq, err := cl.newQueryQueue()
-			if nil != err {
-				go conReq.sendResponse(nil, err)
+			qq := con.newQueryQueue()
+			if nil == qq {
+				log.Fatal("Client is not running")
 			} else {
 				go conReq.sendResponse(qq, nil)
 			}
 		}()
 	} else {
-		// Set up new client
-		cl = &client{ConnectionSettings: conReq.ConnectionSettings}
-		qq, err := cl.startClient()
+		// Set up new connection
+		con = &Connection{ConnectionSettings: conReq.ConnectionSettings}
+		con.isManagedConnection = true
+		qq, err := con.Start()
 		if nil != err {
 			go conReq.sendResponse(nil, err)
 			return
 		}
-		cm.clients[cl.Host] = cl
+		cm.connections[con.Host] = con
 		go conReq.sendResponse(qq, nil)
 	}
 

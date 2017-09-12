@@ -33,16 +33,36 @@ const (
 
 // Modbus Function Codes
 const (
-	FunctionReadCoils                = 0x01
-	FunctionReadDiscreteInputs       = 0x02
-	FunctionReadHoldingRegisters     = 0x03
-	FunctionReadInputRegisters       = 0x04
-	FunctionWriteSingleCoil          = 0x05
-	FunctionWriteSingleRegister      = 0x06
-	FunctionWriteMultipleSingleCoils = 0x0F
-	FunctionWriteMultipleRegisters   = 0x10
-	FunctionEncapsulatedInterface    = 0x2B
+	FunctionReadCoils              byte = 0x01
+	FunctionReadDiscreteInputs          = 0x02
+	FunctionReadHoldingRegisters        = 0x03
+	FunctionReadInputRegisters          = 0x04
+	FunctionWriteSingleCoil             = 0x05
+	FunctionWriteSingleRegister         = 0x06
+	FunctionWriteMultipleCoils          = 0x0F
+	FunctionWriteMultipleRegisters      = 0x10
+	FunctionMaskWriteRegister           = 0x16
 )
+
+var FunctionNames = map[byte]string{
+	FunctionReadCoils:              "ReadCoils",
+	FunctionReadDiscreteInputs:     "ReadDiscreteInputs",
+	FunctionReadHoldingRegisters:   "ReadHoldingRegisters",
+	FunctionReadInputRegisters:     "ReadInputRegisters",
+	FunctionWriteSingleCoil:        "WriteSingleCoil",
+	FunctionWriteSingleRegister:    "WriteSingleRegister",
+	FunctionWriteMultipleCoils:     "WriteMultipleCoils",
+	FunctionWriteMultipleRegisters: "WriteMultipleRegisters",
+	FunctionMaskWriteRegister:      "MaskWriteRegister",
+}
+
+var FunctionCodes = map[string]byte{}
+
+func init() {
+	for b, s := range FunctionNames {
+		FunctionCodes[s] = b
+	}
+}
 
 const (
 	exceptionUnspecified                        = 0x00 // Catch-all for unspecified modbus errors
