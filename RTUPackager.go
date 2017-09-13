@@ -98,6 +98,7 @@ func (pkgr *RTUPackager) Send() ([]byte, error) {
 	}
 
 	// return only the data payload
+	//log.Println(FunctionNames[response[1]], response[:n-2])
 	return response[2 : n-2], nil
 }
 

@@ -6,10 +6,14 @@ import (
 	"fmt"
 )
 
+// Querier defines the Modbus functions implemented by Query. These functions
+// instantiate a valid Query that can be successfully passed to a Packager for
+// execution.
 type Querier interface {
 	ReadFunction(fCode byte, address, quantity uint16) (bool, error)
 	WriteSingleFunction(fCode byte, address, value uint16) (bool, error)
-	WriteMultipleFunction(fCode byte, address, quantity uint16, value []byte) (bool, error)
+	WriteMultipleFunction(fCode byte, address, quantity uint16,
+		value []byte) (bool, error)
 
 	ReadCoils(address, quantity uint16) (bool, error)
 	ReadDiscreteInputs(address, quantity uint16) (bool, error)
@@ -22,15 +26,16 @@ type Querier interface {
 	MaskWriteRegister(address, andMask, orMask uint16) (bool, error)
 }
 
-// Query contains the raw information for a Modbus query and the Response
-// channel to receive the response data on.
+// Query contains the necessary data for a Packager to construct and execute a
+// Modbus query. Queries implement the Querier interface
 type Query struct {
 	SlaveID      byte
 	FunctionCode byte
 	Address      uint16
 	Quantity     uint16
 	Data         []byte
-	Response     chan QueryResponse
+
+	Response chan QueryResponse
 }
 
 // NewQuery returns a pointer to an initialized Query with a valid Response
@@ -39,12 +44,13 @@ func NewQuery() *Query {
 	return &Query{Response: make(chan QueryResponse)}
 }
 
-// sendResponse is a convenience function for sending a ConnectionResponse.
+// sendResponse is a convenience function used by Packagers for sending a the
+// return QueryResponse.
 func (q *Query) sendResponse(data []byte, err error) {
 	q.Response <- QueryResponse{Data: data, Err: err}
 }
 
-// Request:
+// ReadFunction sets up the Query for a ReadFunction query.
 //  Function code         : 1 byte
 //  Starting address      : 2 bytes
 //  Quantity of registers : 2 bytes
@@ -60,6 +66,10 @@ func (q *Query) ReadFunction(fCode byte, address, quantity uint16) (bool, error)
 	return q.IsValid()
 }
 
+// Request:
+//  Function code         : 1 byte
+//  Starting address      : 2 bytes
+//  Register value 	  : 2 bytes
 func (q *Query) WriteSingleFunction(fCode byte, address, value uint16) (bool, error) {
 	q.FunctionCode = fCode
 	q.Address = address
@@ -72,6 +82,12 @@ func (q *Query) WriteSingleFunction(fCode byte, address, value uint16) (bool, er
 	return q.IsValid()
 }
 
+// Request:
+//  Function code         : 1 byte
+//  Starting address      : 2 bytes
+//  Quantity of registers : 2 bytes
+//  Byte count            : 1 byte
+//  Outputs value         : N* bytes
 func (q *Query) WriteMultipleFunction(fCode byte, address, quantity uint16, value []byte) (bool, error) {
 	q.FunctionCode = fCode
 	q.Address = address
