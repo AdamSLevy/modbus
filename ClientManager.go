@@ -2,83 +2,62 @@ package modbus
 
 import (
 	"fmt"
-	"log"
 	"sync"
+	"sync/atomic"
 )
 
-// clientRequests are sent to ClientManager to get access to a Client.
-type clientRequest struct {
-	ConnectionSettings
-	response chan *clientResponse
-}
-
-// newClientRequest initializes a new clientRequest with a clientResponse
-// channel.
-func newClientRequest(cs ConnectionSettings) *clientRequest {
-	return &clientRequest{
-		ConnectionSettings: cs,
-		response:           make(chan *clientResponse),
-	}
-}
-
-// sendResponse is a convenience function used by clientManager's runtime to
-// return a clientResponse for a clientRequest.
-func (req *clientRequest) sendResponse(q chan Query, err error) {
-	req.response <- &clientResponse{
-		QueryQueue: q,
-		Err:        err,
-	}
-}
-
-// clientResponse is returned by clientManager's runtime with an initialized
-// Query channel, QueryQueue, if the corresponding clientRequest was
-// successful. Otherwise the error, Err, is set.
-type clientResponse struct {
-	QueryQueue chan Query
-	Err        error
-}
-
-// ClientManager is a singleton object that uniquely sets up Clients based on
-// clientRequests and returns a unique channel for sending Queries to the
-// Client encapsulated in a clientResponse. Clients are uniquely hashed by
-// their ConnectionSettings.Host string and all additional ConnectionSettings
-// must also match for clientRequests for existing Clients to be successful.
+// ClientManager is a singleton object that serializes and enforces uniqueness
+// on the concurrent creation of clients and associated ClientHandles. Clients
+// are uniquely hashed by their ConnectionSettings.Host string. If a client
+// with a given Host string is already running, then all ConnectionSettings
+// must also match for a ClientHandle to be successfully returned by
+// SetupClient.
 type ClientManager interface {
-	SetupClient(cs ConnectionSettings) (chan Query, error)
+	SetupClient(cs ConnectionSettings) (*ClientHandle, error)
 }
 
 // clientManager is the underlying concrete type implementing ClientManager.
 type clientManager struct {
 	newClient    chan *clientRequest
 	deleteClient chan *string
-	clients      map[string]*Client
+	clients      map[string]*client
 }
 
-// clntMngr is the pointer to the clientManager singleton instance
-var clntMngr *clientManager
+// clntMngr is the pointer to the singleton instance of clientManager.
+var clntMngr atomic.Value
 var once sync.Once
 
+// unmanagedClients is a flag that protects against using both user managed
+// clients created with NewClient, and clients managed by ClientManager.
+var unmanagedClients uint32
+
 // GetClientManager sets up the clientManager singleton once and returns the
-// ClientManager interface.
-func GetClientManager() ClientManager {
+// ClientManager interface. GetClientManager will fail if NewClient has been
+// called previously in the program.
+func GetClientManager() (ClientManager, error) {
+	if 0 != atomic.LoadUint32(&unmanagedClients) {
+		return nil, fmt.Errorf("Cannot start ClientManager after Clients have " +
+			"been initialized with NewClient")
+	}
 	once.Do(func() {
-		clntMngr = &clientManager{
+		cm := &clientManager{
 			newClient:    make(chan *clientRequest),
 			deleteClient: make(chan *string),
-			clients:      make(map[string]*Client),
+			clients:      make(map[string]*client),
 		}
+		clntMngr.Store(cm)
 
-		go clntMngr.requestListener()
+		go cm.requestListener()
 	})
 
-	return clntMngr
+	return clntMngr.Load().(*clientManager), nil
 }
 
-func (cm *clientManager) SetupClient(cs ConnectionSettings) (chan Query, error) {
+func (cm *clientManager) SetupClient(cs ConnectionSettings) (*ClientHandle, error) {
 	req := newClientRequest(cs)
 	cm.newClient <- req
 	res := <-req.response
-	return res.QueryQueue, res.Err
+	return res.ClientHandle, res.Err
 }
 
 func (cm *clientManager) requestListener() {
@@ -118,12 +97,8 @@ func (cm *clientManager) handleClientRequest(clReq *clientRequest) {
 				case delReq := <-cm.deleteClient:
 					if *delReq == cl.Host {
 						// Restart Client
-						qq, err := cl.Start()
-						if nil != err {
-							go clReq.sendResponse(nil, err)
-						} else {
-							go clReq.sendResponse(qq, nil)
-						}
+						go clReq.sendResponse(
+							cl.NewClientHandle())
 						return
 					}
 					delete(cm.clients, *delReq)
@@ -131,24 +106,47 @@ func (cm *clientManager) handleClientRequest(clReq *clientRequest) {
 					run = false
 				}
 			}
-			qq := cl.newQueryQueue()
-			if nil == qq {
-				log.Fatal("Client is not running")
-			} else {
-				go clReq.sendResponse(qq, nil)
-			}
+			go clReq.sendResponse(cl.NewClientHandle())
 		}()
 	} else {
 		// Set up new client
-		cl = &Client{ConnectionSettings: clReq.ConnectionSettings}
-		cl.isManagedClient = true
-		qq, err := cl.Start()
-		if nil != err {
+		cl := newClient(clReq.ConnectionSettings)
+		ch, err := cl.NewClientHandle()
+		if err != nil {
 			go clReq.sendResponse(nil, err)
 			return
 		}
 		cm.clients[cl.Host] = cl
-		go clReq.sendResponse(qq, nil)
+		go clReq.sendResponse(ch, nil)
 	}
 
+}
+
+// clientRequests are sent to ClientManager to get access to a Client.
+type clientRequest struct {
+	ConnectionSettings
+	response chan clientResponse
+}
+
+type clientResponse struct {
+	*ClientHandle
+	Err error
+}
+
+// newClientRequest initializes a new clientRequest with a ClientHandle
+// channel.
+func newClientRequest(cs ConnectionSettings) *clientRequest {
+	return &clientRequest{
+		ConnectionSettings: cs,
+		response:           make(chan clientResponse),
+	}
+}
+
+// sendResponse is a convenience function used by clientManager's runtime to
+// return a ClientHandle for a clientRequest.
+func (req *clientRequest) sendResponse(ch *ClientHandle, err error) {
+	req.response <- clientResponse{
+		ClientHandle: ch,
+		Err:          err,
+	}
 }

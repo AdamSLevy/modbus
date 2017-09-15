@@ -8,11 +8,12 @@ import (
 	//"os"
 	"os/exec"
 	"regexp"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-var conSettings = [...]*ConnectionSettings{
+var conSettings = [...]ConnectionSettings{
 	{Mode: ModeASCII, Baud: 19200, Timeout: 500 * time.Millisecond},
 	{Mode: ModeRTU, Baud: 19200, Timeout: 500 * time.Millisecond},
 	{Mode: ModeTCP, Host: "localhost:5020", Timeout: 500 * time.Millisecond},
@@ -27,35 +28,34 @@ var queries []Query
 
 func init() {
 	queries = make([]Query, 9)
-	for i := range queries {
-		queries[i].SlaveID = 1
-	}
-	values := make([]byte, 4)
-	if v, err := queries[0].ReadCoils(0, 1); !v {
+	var err error
+	slaveID := byte(1)
+	values := make([]uint16, 2)
+	if queries[0], err = ReadCoils(slaveID, 0, 1); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[1].ReadDiscreteInputs(0, 1); !v {
+	if queries[1], err = ReadDiscreteInputs(slaveID, 0, 1); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[2].ReadInputRegisters(0, 1); !v {
+	if queries[2], err = ReadInputRegisters(slaveID, 0, 1); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[3].ReadHoldingRegisters(0, 1); !v {
+	if queries[3], err = ReadHoldingRegisters(slaveID, 0, 1); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[4].WriteSingleCoil(0, false); !v {
+	if queries[4], err = WriteSingleCoil(slaveID, 0, false); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[5].WriteSingleRegister(0, 0); !v {
+	if queries[5], err = WriteSingleRegister(slaveID, 0, 0); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[6].WriteMultipleCoils(0, 2, values[0:1]); !v {
+	if queries[6], err = WriteMultipleCoils(slaveID, 0, 2, values[0:1]); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[7].WriteMultipleRegisters(0, 2, values); !v {
+	if queries[7], err = WriteMultipleRegisters(slaveID, 0, 2, values); err != nil {
 		log.Println(err)
 	}
-	if v, err := queries[8].MaskWriteRegister(0, 0, 0); !v {
+	if queries[8], err = MaskWriteRegister(slaveID, 0, 0, 0); err != nil {
 		log.Println(err)
 	}
 }
@@ -70,134 +70,167 @@ var diagslaveRTUArgs = []string{"-m", "rtu", "-a", "1"}
 var diagslaveTCPArgs = []string{"-m", "tcp", "-a", "1", "-p", "5020"}
 
 func TestMain(m *testing.M) {
-	for _, cs := range conSettings {
-		cancel := setupModbusServer(cs)
+	for i := range conSettings {
+		cancel := setupModbusServer(&conSettings[i])
 		defer cancel()
 	}
 	// Give time for the servers to start
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 
 	m.Run()
 }
 
-func TestGetClientManager(t *testing.T) {
-	t.Run("Initialization", func(t *testing.T) {
-		t.Parallel()
-		GetClientManager()
-		if nil == clntMngr.clients ||
-			nil == clntMngr.newClient ||
-			nil == clntMngr.deleteClient {
-			t.Fatal("ClientManager was not properly initialized")
+func TestInitialization(t *testing.T) {
+	t.Run("NewClient", func(t *testing.T) {
+		cl, err := NewClient(ConnectionSettings{})
+		if nil != err {
+			t.Error(err)
+		}
+		if nil == cl {
+			t.Error("NewClient failed to return a valid Client")
+		}
+		if 1 != atomic.LoadUint32(&unmanagedClients) {
+			t.Error("unmanagedClients not set to 1 after calling NewClient")
 		}
 	})
-	t.Run("Singleton", func(t *testing.T) {
-		t.Parallel()
-		GetClientManager()
-		cm := clntMngr
-		GetClientManager()
-		if cm != clntMngr {
+	t.Run("GetClientManager", func(t *testing.T) {
+		cm, err := GetClientManager()
+		if nil == err {
+			t.Error("Failed to return an error after a call to NewClient")
+		}
+		if nil != cm {
+			t.Error("Returned ClientManager after a call to NewClient")
+		}
+		atomic.StoreUint32(&unmanagedClients, 0)
+		cm, err = GetClientManager()
+		if nil != err {
+			t.Fatal(err)
+		}
+		cM := clntMngr.Load().(*clientManager)
+		if nil == cM.clients ||
+			nil == cM.newClient ||
+			nil == cM.deleteClient {
+			t.Fatal("ClientManager was not properly initialized")
+		}
+		cm1, _ := GetClientManager()
+		cm2, _ := GetClientManager()
+		if cm1 != cm2 {
 			t.Fatal("GetClientManager() returned two different " +
 				"pointers")
+		}
+		cl, err := NewClient(ConnectionSettings{})
+		if nil == err {
+			t.Error("NewClient did not return an error after GetClientManager")
+		}
+		if nil != cl {
+			t.Error("NewClient returned a Client after GetClientManager")
 		}
 	})
 }
 
 func TestClientManager(t *testing.T) {
 	t.Run("SetupClient", func(t *testing.T) {
-		for i, cs := range conSettings {
-			t.Run(modeName[i], func(t *testing.T) {
+		for _, cs := range conSettings {
+			t.Run(modeName[cs.Mode], func(t *testing.T) {
 				t.Parallel()
-				cm := GetClientManager()
-				ch := make(chan interface{}, 1)
-				var qq chan Query
-				var err error
+				cm, err := GetClientManager()
+				if nil != err {
+					t.Fatal(err)
+				}
+				done := make(chan interface{}, 1)
+				var ch *ClientHandle
 				go func() {
-					qq, err = cm.SetupClient(*cs)
-					ch <- true
+					ch, err = cm.SetupClient(cs)
+					done <- true
 				}()
 				select {
-				case <-ch:
+				case <-done:
 				case <-time.After(500 * time.Millisecond):
 					t.Fatal("SetupClient timed out")
 				}
 				if nil != err {
 					t.Fatal(err)
-				} else if nil == qq {
-					t.Fatal("Query channel is nil")
+				} else if nil == ch {
+					t.Fatal("*ClientHandle is nil")
 				}
-				close(qq)
+				if ch.Close() != nil {
+					t.Fatal(err)
+				}
 			})
 		}
 		t.Run("invalid", func(t *testing.T) {
 			t.Parallel()
-			cm := GetClientManager()
-			ch := make(chan interface{}, 1)
-			var qq chan Query
-			var err error
+			cm, err := GetClientManager()
+			if nil != err {
+				t.Fatal(err)
+			}
+			done := make(chan interface{}, 1)
+			var ch *ClientHandle
 			go func() {
-				qq, err = cm.SetupClient(ConnectionSettings{})
-				ch <- true
+				ch, err = cm.SetupClient(ConnectionSettings{})
+				done <- true
 			}()
 			select {
-			case <-ch:
+			case <-done:
 			case <-time.After(500 * time.Millisecond):
 				t.Fatal("SetupClient timed out")
 			}
 			if nil == err {
 				t.Fatal("Did not return an error")
 			}
-			if nil != qq {
-				t.Fatal("Query channel is not nil")
+			if nil != ch {
+				t.Fatal("*ClientHandle is not nil")
 			}
 		})
 	})
 	// Give time for the clients to shutdown
-	time.Sleep(10 * time.Millisecond)
-	if len(clntMngr.clients) > 0 {
+	time.Sleep(50 * time.Millisecond)
+	if len(clntMngr.Load().(*clientManager).clients) > 0 {
 		t.Fatal("Clients did not shutdown on close")
+	}
+	t.Run("Query", func(t *testing.T) {
+		testQueries(t)
+	})
+}
+
+func testQuery(t *testing.T, ch ClientHandle, q Query) {
+	done := make(chan interface{})
+	var data []byte
+	var err error
+	go func() {
+		data, err = ch.Send(q)
+		done <- true
+	}()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Query timed out")
+	}
+	if nil != err {
+		t.Fatal(err)
+	}
+	if nil == data {
+		t.Fatal("Response data is nil")
 	}
 }
 
-func TestQueries(t *testing.T) {
+func testQueries(t *testing.T) {
 	for i, cs := range conSettings {
 		cs := cs
-		cm := GetClientManager()
+		cm, _ := GetClientManager()
 		t.Run(modeName[i], func(t *testing.T) {
 			t.Parallel()
 			for _, q := range queries {
 				q := q
 				t.Run(FunctionNames[q.FunctionCode], func(t *testing.T) {
 					t.Parallel()
-					qq, err := cm.SetupClient(*cs)
+					ch, err := cm.SetupClient(cs)
 					if nil != err {
 						t.Fatal(err)
-					} else if nil == qq {
-						t.Fatal("Query channel is nil")
+					} else if nil == ch {
+						t.Fatal("*ClientHandle is nil")
 					}
-					q.Response = make(chan QueryResponse)
-					ch := make(chan interface{})
-					go func() {
-						qq <- q
-						ch <- true
-					}()
-
-					select {
-					case <-ch:
-					case <-time.After(500 * time.Millisecond):
-						t.Fatal("Query timed out")
-					}
-
-					select {
-					case res := <-q.Response:
-						if nil != res.Err {
-							t.Fatal(res.Err)
-						}
-						if nil == res.Data {
-							t.Fatal("Data is nil")
-						}
-					case <-time.After(500 * time.Millisecond):
-						t.Fatal("Response timeout")
-					}
+					testQuery(t, *ch, q)
 				})
 			}
 		})
