@@ -108,16 +108,17 @@ func (pkgr *ASCIIPackager) Send(q Query) ([]byte, error) {
 		return nil, exceptions[exceptionBadChecksum]
 	}
 
+	response = response[:rawN-1]
 	// Check the validity of the response
-	if valid, err := isValidResponse(q, response); !valid {
+	if valid, err := q.isValidResponse(response); !valid {
 		return nil, err
 	}
 
 	// Return only the data payload
 	if IsReadFunction(q.FunctionCode) {
-		return response[3 : rawN-1], nil
+		return response[3:], nil
 	}
-	return response[2 : rawN-1], nil
+	return response[2:], nil
 }
 
 // Modbus ASCII uses Longitudinal Redundancy Check. lrc computes and returns

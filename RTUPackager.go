@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/tarm/serial"
 	"log"
+	"time"
 )
 
 type RTUPackager struct {
@@ -66,6 +67,7 @@ func (pkgr *RTUPackager) Send(q Query) ([]byte, error) {
 		return nil, err
 	}
 
+	time.Sleep(20 * time.Millisecond)
 	response := make([]byte, MaxRTUSize)
 	n, rerr := pkgr.Read(response)
 	if rerr != nil {
@@ -77,19 +79,20 @@ func (pkgr *RTUPackager) Send(q Query) ([]byte, error) {
 	if computedCrc != binary.LittleEndian.Uint16(response[n-2:]) {
 		return nil, exceptions[exceptionBadChecksum]
 	}
+	response = response[:n-2]
 
 	// Check the validity of the response
-	if valid, err := isValidResponse(q, response); !valid {
+	if valid, err := q.isValidResponse(response); !valid {
 		return nil, err
 	}
 
 	// Return only the data payload
 	if IsReadFunction(q.FunctionCode) {
-		return response[3 : n-2], nil
+		return response[3:], nil
 	}
 
 	// Return only the data payload
-	return response[2 : n-2], nil
+	return response[2:], nil
 }
 
 // crc computes and returns a cyclic redundancy check of the given byte array.

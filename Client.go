@@ -2,27 +2,31 @@ package modbus
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 // ClientHandle provides a handle for sending Queries to a Client.
-type ClientHandle struct {
+type clientHandle struct {
 	queryQueue chan query
 	response   chan queryResponse
 	ConnectionSettings
 }
 
+type ClientHandle interface {
+	Send(q Query) ([]byte, error)
+	Close() error
+}
+
 // Send sends a Query to the associated Client and returns the response and
 // error.
-func (ch *ClientHandle) Send(q Query) ([]byte, error) {
-	if ch.queryQueue == nil {
-		return nil, fmt.Errorf("ClientHandle has been closed")
+func (ch *clientHandle) Send(q Query) ([]byte, error) {
+	if nil == ch {
+		return nil, fmt.Errorf("ClientHandle is nil")
 	}
-	if ch.response == nil {
-		ch.response = make(chan queryResponse)
+	if nil == ch.queryQueue {
+		return nil, fmt.Errorf("ClientHandle has been closed")
 	}
 	ch.queryQueue <- query{Query: q, response: ch.response}
 	res := <-ch.response
@@ -31,8 +35,11 @@ func (ch *ClientHandle) Send(q Query) ([]byte, error) {
 
 // Close closes the ClientHandle. Once all ClientHandles for a given Client
 // have been closed, the Client will shutdown.
-func (ch *ClientHandle) Close() error {
-	if ch.queryQueue == nil {
+func (ch *clientHandle) Close() error {
+	if nil == ch {
+		return fmt.Errorf("ClientHandle is nil")
+	}
+	if nil == ch.queryQueue {
 		return fmt.Errorf("ClientHandle was already closed")
 	}
 	close(ch.queryQueue)
@@ -64,7 +71,7 @@ type ConnectionSettings struct {
 // created with NewClient and using the ClientManager are mutually exclusive
 // modes of operation for this library.
 type Client interface {
-	NewClientHandle() (*ClientHandle, error)
+	NewClientHandle() (ClientHandle, error)
 }
 
 // NewClient sets up a client with the given ConnectionSettings and returns a
@@ -72,10 +79,11 @@ type Client interface {
 // NewClient are not managed by the ClientManager. If you use the ClientManager
 // do not use NewClient and instead use ClientManager.SetupClient().
 func NewClient(cs ConnectionSettings) (Client, error) {
-	switch clntMngr.Load().(type) {
-	case *clientManager:
+	ptr := clntMngr.Load()
+	if nil != ptr {
 		return nil, fmt.Errorf("ClientManager is already in use. " +
-			"Use ClientManager.SetupClient instead of NewClient.")
+			"Use of NewClient and ClientManager.SetupClient are " +
+			"mutually exclusive.")
 	}
 	atomic.StoreUint32(&unmanagedClients, 1)
 
@@ -105,15 +113,20 @@ type client struct {
 	mu sync.Mutex
 	wg sync.WaitGroup
 
-	qq          chan query
-	newQQSignal chan interface{}
+	qq                chan query
+	newQQSignal       chan interface{}
+	queryListenerDone chan interface{}
 }
 
 // NewClientHandle starts the client if it isn't already running and then, if
 // successful, returns a new ClientHandle and starts a goroutine that forwards
 // the queries sent by that ClientHandle onto the client's main internal query
 // channel.
-func (c *client) NewClientHandle() (*ClientHandle, error) {
+func (c *client) NewClientHandle() (ClientHandle, error) {
+	return c.newClientHandle()
+}
+
+func (c *client) newClientHandle() (*clientHandle, error) {
 	if c.qq == nil {
 		return c.start()
 	}
@@ -140,7 +153,7 @@ func (c *client) NewClientHandle() (*ClientHandle, error) {
 		<-c.newQQSignal // Consume newQQSignal before signaling Done()
 		c.wg.Done()
 	}()
-	return &ClientHandle{
+	return &clientHandle{
 		ConnectionSettings: c.ConnectionSettings,
 		queryQueue:         qq,
 		response:           make(chan queryResponse),
@@ -150,8 +163,8 @@ func (c *client) NewClientHandle() (*ClientHandle, error) {
 
 // start sets up the appropriate Transporter and Packager for the given
 // ConnectionSettings and, if successful, starts the client's queryListener and
-// queryQueueChannelMonitor goroutines and returns a new *ClientHandle.
-func (c *client) start() (*ClientHandle, error) {
+// queryQueueChannelMonitor goroutines and returns a new ClientHandle.
+func (c *client) start() (*clientHandle, error) {
 	switch c.Mode {
 	case ModeTCP:
 		p, err := NewTCPPackager(c.ConnectionSettings)
@@ -173,9 +186,10 @@ func (c *client) start() (*ClientHandle, error) {
 		c.Packager = p
 	}
 	c.qq = make(chan query)
+	c.queryListenerDone = make(chan interface{}, 1)
 	go c.queryListener()
 
-	ch, _ := c.NewClientHandle()
+	ch, _ := c.newClientHandle()
 	go c.queryQueueChannelMonitor()
 
 	return ch, nil
@@ -190,12 +204,11 @@ func (c *client) queryListener() {
 	// Set up connection for slave
 	for qry := range c.qq {
 		qry := qry
-		if nil == qry.response {
-			log.Println("No Query.Response channel set up")
-			continue
-		}
-		go qry.sendResponse(c.Send(qry.Query))
+		time.Sleep(15 * time.Millisecond)
+		d, e := c.Send(qry.Query)
+		go qry.sendResponse(d, e)
 	}
+	c.queryListenerDone <- true
 }
 
 // queryQueueChannelMonitor waits for all query forwarding goroutines to exit
@@ -227,8 +240,11 @@ func (c *client) queryQueueChannelMonitor() {
 		clntMngr.Load().(*clientManager).deleteClient <- &c.Host
 	}
 	close(c.qq)
-	c.qq = nil
-	c.mu.Unlock()
+	defer func() {
+		<-c.queryListenerDone
+		c.qq = nil
+		c.mu.Unlock()
+	}()
 }
 
 // query encapsulates a Query with a queryResponse channel so it can be sent to

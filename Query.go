@@ -43,7 +43,7 @@ func (q Query) IsValid() (bool, error) {
 			expectedLen++
 		}
 	case FunctionWriteMultipleRegisters:
-		maxQuantity = 125
+		maxQuantity = 123
 		expectedLen = int(q.Quantity)
 	case FunctionMaskWriteRegister:
 		expectedLen = 2
@@ -52,10 +52,10 @@ func (q Query) IsValid() (bool, error) {
 	}
 
 	// Check quantity
-	if IsWriteMultipleFunction(q.FunctionCode) &&
-		(q.Quantity == 0 || q.Quantity > maxQuantity) {
-		return false, fmt.Errorf("%v: Quantity %v out of range [1, %v]",
-			errString, q.Quantity, maxQuantity)
+	if (IsReadFunction(q.FunctionCode) || IsWriteMultipleFunction(q.FunctionCode)) &&
+		(q.Quantity == 0 || q.Address+q.Quantity > maxQuantity) {
+		return false, fmt.Errorf("%v: Requested address range [%v, %v] out of range [0, %v]",
+			errString, q.Address, q.Address+q.Quantity, maxQuantity)
 	}
 	// Check len(Values)
 	if IsWriteFunction(q.FunctionCode) {
@@ -69,14 +69,86 @@ func (q Query) IsValid() (bool, error) {
 	return true, nil
 }
 
-// data s called by a Packager to construct the data payload for the Query and
+// isValidResponse is used by Packagers to validate the response data against a
+// given Query.
+func (q Query) isValidResponse(response []byte) (bool, error) {
+	if nil == response || len(response) == 0 {
+		return false, exceptions[exceptionEmptyResponse]
+	}
+
+	if response[0] != q.SlaveID {
+		return false, exceptions[exceptionSlaveIDMismatch]
+	}
+
+	// Check for Modbus Exception Response
+	if FunctionCode(response[1]) != q.FunctionCode {
+		if FunctionCode(response[1]&0x7f) == q.FunctionCode {
+			switch response[2] {
+			case exceptionIllegalFunction:
+				fallthrough
+			case exceptionDataAddress:
+				fallthrough
+			case exceptionDataValue:
+				fallthrough
+			case exceptionSlaveDeviceFailure:
+				fallthrough
+			case exceptionAcknowledge:
+				fallthrough
+			case exceptionSlaveDeviceBusy:
+				fallthrough
+			case exceptionMemoryParityError:
+				fallthrough
+			case exceptionGatewayPathUnavailable:
+				fallthrough
+			case exceptionGatewayTargetDeviceFailedToRespond:
+				return false, exceptions[uint16(response[2])]
+			default:
+				return false, exceptions[exceptionUnknown]
+			}
+		}
+		return false, exceptions[exceptionUnknown]
+	}
+
+	if IsWriteFunction(q.FunctionCode) {
+		data, _ := q.data()
+		for i := 0; i < 4; i++ {
+			if i >= len(response) || data[i] != response[2+i] {
+				return false, exceptions[exceptionWriteDataMismatch]
+			}
+		}
+	}
+
+	if IsReadFunction(q.FunctionCode) {
+		var expectedLen int
+		switch q.FunctionCode {
+		case FunctionReadCoils:
+			fallthrough
+		case FunctionReadDiscreteInputs:
+			expectedLen = int(q.Quantity) / 8
+			if q.Quantity%8 != 0 {
+				expectedLen++
+			}
+		case FunctionReadInputRegisters:
+			fallthrough
+		case FunctionReadHoldingRegisters:
+			expectedLen = int(q.Quantity) * 2
+		}
+		if int(response[2]) != expectedLen {
+			return false, exceptions[exceptionBadResponseLength]
+		}
+		if len(response[3:]) != expectedLen {
+			return false, exceptions[exceptionResponseLengthMismatch]
+		}
+	}
+
+	return true, nil
+}
+
+// data is called by a Packager to construct the data payload for the Query and
 // check if it IsValid().
 func (q Query) data() ([]byte, error) {
 	if valid, err := q.IsValid(); !valid {
 		return nil, err
-	}
-	if IsReadFunction(q.FunctionCode) {
-		return dataBlock(q.Address, q.Quantity), nil
 	}
 	if IsWriteFunction(q.FunctionCode) {
 		if IsWriteMultipleFunction(q.FunctionCode) {
@@ -102,7 +174,9 @@ func (q Query) data() ([]byte, error) {
 			return dataBlock(q.Address, andMask, orMask), nil
 		}
 	}
-	return nil, fmt.Errorf("Invalid FunctionCode: %x", q.FunctionCode)
+
+	// IsReadFunction() must be true
+	return dataBlock(q.Address, q.Quantity), nil
 }
 
 // dataBlock creates a sequence of uint16 data.

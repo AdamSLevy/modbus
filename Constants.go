@@ -14,6 +14,13 @@ const (
 	ModeASCII
 )
 
+// ModeNames maps Mode to a string description
+var ModeNames = map[Mode]string{
+	ModeTCP:   "TCP",
+	ModeRTU:   "RTU",
+	ModeASCII: "ASCII",
+}
+
 // DefaultPort is the default port number for Modbus TCP
 const (
 	DefaultPort = 502
@@ -69,7 +76,8 @@ func init() {
 
 // exception indexes into the exceptions map
 const (
-	exceptionUnspecified                        = 0x00
+	// Official Modbus Exceptions
+	exceptionUnknown                            = 0x00
 	exceptionIllegalFunction                    = 0x01
 	exceptionDataAddress                        = 0x02
 	exceptionDataValue                          = 0x03
@@ -79,17 +87,22 @@ const (
 	exceptionMemoryParityError                  = 0x08
 	exceptionGatewayPathUnavailable             = 0x0A
 	exceptionGatewayTargetDeviceFailedToRespond = 0x0B
-	exceptionBadFraming                         = 0xfc // this is not official
-	exceptionSlaveIDMismatch                    = 0xfd // this is not official
-	exceptionWriteDataMismatch                  = 0xfe // this is not official
-	exceptionBadChecksum                        = 0xff // this is not official
+
+	// Unofficial exceptions
+	exceptionEmptyResponse          = 0xf9
+	exceptionBadResponseLength      = 0xfa
+	exceptionBadFraming             = 0xfb
+	exceptionSlaveIDMismatch        = 0xfc
+	exceptionWriteDataMismatch      = 0xfd
+	exceptionResponseLengthMismatch = 0xfe
+	exceptionBadChecksum            = 0xff
 )
 
 // exceptions contains a map of common exceptions that may be returned by a
 // Packager in the course of sending a Query.
 var exceptions = map[uint16]error{
-	exceptionUnspecified: errors.New(
-		"Modbus Error"),
+	exceptionUnknown: errors.New(
+		"Modbus Error: Unknown"),
 	exceptionIllegalFunction: errors.New(
 		"Modbus Error: Illegal Function (0x01)"),
 	exceptionDataAddress: errors.New(
@@ -108,12 +121,19 @@ var exceptions = map[uint16]error{
 		"Modbus Error: Gateway Path Unavailable (0x0A)"),
 	exceptionGatewayTargetDeviceFailedToRespond: errors.New(
 		"Modbus Error: Gateway Target Device Failed to Respond (0x0B)"),
+
+	exceptionEmptyResponse: errors.New(
+		"Response Error: Empty response"),
+	exceptionBadResponseLength: errors.New(
+		"Response Error: Bad response length"),
 	exceptionBadFraming: errors.New(
-		"Modbus Error: Bad Framing"),
+		"Response Error: Bad Framing"),
 	exceptionSlaveIDMismatch: errors.New(
-		"Modbus Error: SlaveID mismatch"),
+		"Response Error: SlaveID mismatch"),
 	exceptionWriteDataMismatch: errors.New(
-		"Modbus Error: Write data mismatch"),
+		"Response Error: Write data mismatch"),
+	exceptionResponseLengthMismatch: errors.New(
+		"Response Error: Response length mismatch"),
 	exceptionBadChecksum: errors.New(
-		"Modbus Error: Bad Checksum"),
+		"Response Error: Bad Checksum"),
 }

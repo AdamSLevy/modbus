@@ -21,11 +21,13 @@ type TCPPackager struct {
 
 // NewTCPPackager initializes a new TCPPackager with the given Transporter t.
 func NewTCPPackager(c ConnectionSettings) (*TCPPackager, error) {
+	addr, err := net.ResolveTCPAddr("tcp", c.Host)
 	// attempt to connect to the slave device (server)
-	conn, err := net.DialTimeout("tcp", c.Host, c.Timeout)
+	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
 		return nil, err
 	}
+	conn.SetKeepAlive(true)
 	return &TCPPackager{
 		Conn: conn,
 		SetAndValidateTransactionID: true,
@@ -75,6 +77,7 @@ func (pkgr *TCPPackager) Send(q Query) ([]byte, error) {
 		return nil, err
 	}
 
+	pkgr.SetDeadline(time.Now().Add(pkgr.timeout))
 	response := make([]byte, MaxTCPSize)
 	n, err := pkgr.Read(response)
 	if err != nil {
@@ -86,14 +89,15 @@ func (pkgr *TCPPackager) Send(q Query) ([]byte, error) {
 		return nil, errors.New("Mismatched transactionID")
 	}
 
+	response = response[6:n]
 	// Check the validity of the response
-	if valid, err := isValidResponse(q, response[6:]); !valid {
+	if valid, err := q.isValidResponse(response); !valid {
 		return nil, err
 	}
 
 	if IsReadFunction(q.FunctionCode) {
-		return response[9:n], nil
+		return response[3:], nil
 	}
 	// return only the number of bytes read
-	return response[8:n], nil
+	return response[2:], nil
 }
