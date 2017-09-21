@@ -163,10 +163,11 @@ func (q Query) data() ([]byte, error) {
 			return dataBlockSuffix(values, q.Address, q.Quantity), nil
 		}
 		if isWriteSingleFunction(q.FunctionCode) {
+			value := q.Values[0]
 			if q.FunctionCode == FunctionWriteSingleCoil && q.Values[0] != 0 {
-				q.Values[0] = 0xFF00
+				value = 0xFF00
 			}
-			return dataBlock(q.Address, q.Values[0]), nil
+			return dataBlock(q.Address, value), nil
 		}
 		if q.FunctionCode == FunctionMaskWriteRegister {
 			andMask := q.Values[0]

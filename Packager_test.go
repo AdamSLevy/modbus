@@ -14,8 +14,9 @@ func TestPackager(t *testing.T) {
 			validStr = "invalid/"
 		}
 		p, err := NewPackager(cs.ConnectionSettings)
-		cs := cs
 		t.Run(validStr+ModeNames[cs.Mode], func(t *testing.T) {
+			p := p
+			cs := cs
 			if cs.isValid {
 				if nil != err {
 					t.Fatal(err)
