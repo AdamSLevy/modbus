@@ -13,7 +13,7 @@ type testQuery struct {
 }
 
 func init() {
-	for i, _ := range testQueries {
+	for i := range testQueries {
 		testQueries[i].SlaveID = 1
 	}
 }

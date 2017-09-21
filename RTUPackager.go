@@ -8,11 +8,14 @@ import (
 	"time"
 )
 
+// RTUPackager implements the Packager interface for Modbus RTU.
 type RTUPackager struct {
 	packagerSettings
 	*serial.Port
 }
 
+// NewRTUPackager returns a new, ready to use RTUPackager with the given
+// ConnectionSettings.
 func NewRTUPackager(c ConnectionSettings) (*RTUPackager, error) {
 	p, err := newSerialPort(c)
 	if nil != err {
@@ -49,6 +52,7 @@ func (pkgr *RTUPackager) generateADU(q Query) ([]byte, error) {
 	return packet, nil
 }
 
+// Send sends the Query and returns the result or and error code.
 func (pkgr *RTUPackager) Send(q Query) ([]byte, error) {
 	adu, err := pkgr.generateADU(q)
 	if err != nil {

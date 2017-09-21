@@ -45,6 +45,8 @@ func GetClientHandle(cs ConnectionSettings) (ClientHandle, error) {
 var clntMngr clientManager
 var once sync.Once
 
+// clientManager is a singleton object that manages starting and stopping
+// clients, uniquely hashed by their client.ConnectionSetting.Host string.
 type clientManager struct {
 	closeHandle chan string
 	newClient   chan *clientRequest
@@ -52,6 +54,8 @@ type clientManager struct {
 	exit        chan interface{}
 }
 
+// requestListener is clientManager's runtime that listens for clientRequests
+// and closeHandles. This serializes access to the clients map.
 func (cm *clientManager) requestListener() {
 	for {
 		select {
@@ -71,6 +75,9 @@ func (cm *clientManager) requestListener() {
 	}
 }
 
+// handleClientRequest checks is a client with the same Host string is running
+// and makes sure all other ConnectionSettings match before returning a new
+// clientHandle. If such a client does not exist, it tries to set one up.
 func (cm *clientManager) handleClientRequest(
 	clReq *clientRequest) (*clientHandle, error) {
 	cl, ok := cm.clients[clReq.Host]
@@ -85,23 +92,24 @@ func (cm *clientManager) handleClientRequest(
 			return nil, err
 		}
 		return cl.newClientHandle()
-	} else {
-		// Set up new client
-		cl := newClient(clReq.ConnectionSettings)
-		ch, err := cl.start()
-		if nil == err {
-			cm.clients[cl.Host] = cl
-		}
-		return ch, err
 	}
+	// Set up new client
+	cl := newClient(clReq.ConnectionSettings)
+	ch, err := cl.start()
+	if nil == err {
+		cm.clients[cl.Host] = cl
+	}
+	return ch, err
 }
 
-// clientRequests are sent to ClientManager to get access to a Client.
+// clientRequests are sent to clientManager's newClient channel to setup or get
+// access to a client.
 type clientRequest struct {
 	ConnectionSettings
 	response chan clientResponse
 }
 
+// clientResponses are sent back to the GetClientHandle function caller.
 type clientResponse struct {
 	*clientHandle
 	Err error
@@ -123,16 +131,17 @@ func (req *clientRequest) sendResponse(ch *clientHandle, err error) {
 }
 
 // ClientHandle provides a handle for sending Queries to a Client.
-type clientHandle struct {
-	queryQueue chan query
-	response   chan queryResponse
-	ConnectionSettings
-}
-
 type ClientHandle interface {
 	Send(q Query) ([]byte, error)
 	Close() error
 	GetConnectionSettings() ConnectionSettings
+}
+
+// clientHandle is the underlying type implementing ClientHandle.
+type clientHandle struct {
+	queryQueue chan query
+	response   chan queryResponse
+	ConnectionSettings
 }
 
 // Send sends a Query to the associated Client and returns the response and

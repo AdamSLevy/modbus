@@ -11,8 +11,8 @@ type Transporter interface {
 }
 
 // Packager generates the raw bytes of a Modbus packet for a given Query,
-// transmits the Query on the underlying Transporter interface, and waits and
-// returns the response data. A Packager is implemented for the three modbus
+// transmits the Query on the underlying Transporter interface, and returns and
+// parses the response data. A Packager is implemented for the three modbus
 // Modes: ASCIIPackager, RTUPackager and TCPPackager.
 type Packager interface {
 	Send(q Query) ([]byte, error)
@@ -31,6 +31,7 @@ func (ps *packagerSettings) SetDebug(debug bool) {
 	ps.Debug = debug
 }
 
+// NewPackager returns a Packager according to the cs.Mode.
 func NewPackager(cs ConnectionSettings) (Packager, error) {
 	switch cs.Mode {
 	case ModeTCP:
