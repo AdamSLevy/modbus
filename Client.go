@@ -1,3 +1,19 @@
+// Package modbus implements a threadsafe modbus library.
+//
+// Start by initializing a valid ConnectionSettings object and passing it to
+// GetClientHandle. If successful, the error will be <nil> and you can use the
+// ClientHandle.Send(Query) interface to transmit a Query.
+//
+// The ClientHandle can be used in multiple goroutines concurrently as long as
+// ClientHandle.Close() has not yet been called. To allow for each goroutine to
+// call ClientHandle.Close() asynchronously, multiple ClientHandles for the
+// same ConnectionSettings can be acquired using repeated calls to
+// GetClientHandle. The clients are hashed by their ConnectionSettings.Host
+// string, and ConnectionSettings must match exactly for multiple ClientHandles
+// to be returned.
+//
+// After all ClientHandles for a given client with the corresponding
+// ConnectionSettings have been closed, the client is automatically shutdown.
 package modbus
 
 import (
