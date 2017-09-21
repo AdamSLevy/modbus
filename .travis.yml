@@ -9,6 +9,8 @@ before_install:
   - wget http://www.modbusdriver.com/downloads/diagslave.2.12.zip
   - mkdir diagslave
   - unzip -d diagslave diagslave.2.12.zip
+  - chown u+x diagslave/linux/diagslave
   - export PATH="$PWD/diagslave/linux/:$PATH"
+  - echo $PATH
 script:
   - go test -v -race
