@@ -20,6 +20,13 @@
 //
 // After all ClientHandles for a given client with the corresponding
 // ConnectionSettings have been closed, the client is automatically shutdown.
+//
+// Synchronous Access
+//
+// The RTU, ASCII and TCP Packagers implement the modbus protocol and can be
+// used directly to send Queries. This is intended to allow more flexible use
+// of the underlying modbus library, such as in simple programs that don't
+// require concurrency.
 package modbus
 
 import (
