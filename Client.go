@@ -1,11 +1,11 @@
 // Package modbus implements a threadsafe modbus library.
 //
 // Start by initializing a valid ConnectionSettings object and passing it to
-// GetClientHandle. If successful, the error will be <nil> and you can use the
-// ClientHandle.Send(Query) interface to transmit a Query.
+// GetClientHandle. If successful, the error will be <nil> and you can use
+// ClientHandle.Send(Query) to transmit a Query.
 //
 // The ClientHandle can be used in multiple goroutines concurrently as long as
-// ClientHandle.Close() has not yet been called. To allow for each goroutine to
+// ClientHandle.Close() has yet to be called. To allow for each goroutine to
 // call ClientHandle.Close() asynchronously, multiple ClientHandles for the
 // same ConnectionSettings can be acquired using repeated calls to
 // GetClientHandle. The clients are hashed by their ConnectionSettings.Host
@@ -148,8 +148,14 @@ func (req *clientRequest) sendResponse(ch *clientHandle, err error) {
 
 // ClientHandle provides a handle for sending Queries to a Client.
 type ClientHandle interface {
+	// Send sends the Query to the underlying client for transmission and
+	// waits for the response data.
 	Send(q Query) ([]byte, error)
+	// Close closes the ClientHandle. Once all ClientHandles for a given Client
+	// have been closed, the Client will shutdown.
 	Close() error
+	// GetConnectionSettings returns the ConnectionSettings for the client
+	// associated with this ClientHandle.
 	GetConnectionSettings() ConnectionSettings
 }
 

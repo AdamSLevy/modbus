@@ -1,7 +1,7 @@
 # Threadsafe Modbus Client Library
 [![GoDoc](https://godoc.org/github.com/AdamSLevy/modbus?status.svg)](https://godoc.org/github.com/AdamSLevy/modbus)
 
-This Go library implements a Modbus Client (i.e. a master) that can be used
+This Go package implements a Modbus Client (i.e. a master) that can be used
 concurrently in multiple goroutines.
 
 ## Supported Protocols
