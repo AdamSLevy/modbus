@@ -21,6 +21,9 @@ var ModeNames = map[Mode]string{
 	ModeASCII: "ASCII",
 }
 
+// ModeByName maps ModeNames to their Mode, i.e. the inverse of ModeNames.
+var ModeByName = map[string]Mode{}
+
 // MaxRTUSize MaxASCIISize and MaxTCPSize define the maximum allowable number
 // of byes in a single Modbus packet.
 const (
@@ -66,6 +69,9 @@ func init() {
 	// Initialize FunctionCodes map as the inverse of the FunctionNames map
 	for b, s := range FunctionNames {
 		FunctionCodes[s] = b
+	}
+	for m, s := range ModeNames {
+		ModeByName[s] = m
 	}
 }
 
