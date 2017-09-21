@@ -47,7 +47,7 @@ csRTU := ConnectionSettings{
 ```
 GetClientHandle returns a ClientHandle object which can be used to concurrently
 send Query objects to the underlying client. This starts the client with the
-given ConnectionSettings if not already running. 
+given ConnectionSettings if it's not already running. 
 ```go
 ch, err := modbus.GetClientHandle(csTCP)
 if nil != err {
@@ -72,9 +72,22 @@ if nil != err {
         return
 }
 ```
-Create a Query using one of the function code initializers. Alternatively you
-can manually initialize a Query struct and call IsValid() on the Query to make
-sure that it is well formed.
+Create a Query using one of the function code initializers. 
+```go
+readCoils, err := ReadCoils(0, 0, 5) // SlaveID, Address, Quantity
+if nil != err {
+        fmt.Println(err)
+        return
+}
+data, err := ch.Send(readCoils)
+```
+You can edit and reuse the Query, say to change the SlaveID.
+```go
+readCoils.SlaveID = 1
+data, err := ch.Send(readCoils)
+```
+Alternatively you can manually initialize a Query struct and call IsValid() on
+the Query to make sure that it is well formed.
 ```go
 readDiscreteInputs := Query{
         FunctionCode: FunctionReadDiscreteInputs,
@@ -98,13 +111,9 @@ if valid, err := writeMultipleRegisters.IsValid(); !valid {
         return
 }
 
-readCoils, err := ReadCoils(0, 0, 5) // SlaveID, Address, Quantity
-if nil != err {
-        fmt.Println(err)
-        return
-}
-data, err := ch.Send(q)
-if 
 ```
-The client is closed after all open ClientHandles have been closed
-with their Close() method.
+When you are finished using the ClientHandle, call its Close() method. The
+underlying client is closed and all associated goroutines will return once all
+open ClientHandles are closed. Keep in mind that if you are sharing a
+ClientHandle between multiple goroutines, and one call Close, that ClientHandle
+will fail to send any further Queries.
