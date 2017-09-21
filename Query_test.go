@@ -19,219 +19,219 @@ func init() {
 }
 
 var testQueries = []testQuery{
-	testQuery{isValid: false, test: "FunctionCode=0xff", Query: Query{
+	{isValid: false, test: "FunctionCode=0xff", Query: Query{
 		FunctionCode: FunctionCode(0xff),
 	}},
 
 	// Read Coils
-	testQuery{isValid: false, test: "Quantity=0", Query: Query{
+	{isValid: false, test: "Quantity=0", Query: Query{
 		FunctionCode: FunctionReadCoils,
 	}},
-	testQuery{isValid: true, test: "Min Quantity=1", Query: Query{
+	{isValid: true, test: "Min Quantity=1", Query: Query{
 		FunctionCode: FunctionReadCoils,
 		Address:      1,
 		Quantity:     1,
 	}, Data: []byte{0, 1, 0, 1}},
-	testQuery{isValid: true, test: "Max Quantity=2000", Query: Query{
+	{isValid: true, test: "Max Quantity=2000", Query: Query{
 		FunctionCode: FunctionReadCoils,
 		Address:      0,
 		Quantity:     2000,
 	}, Data: []byte{0, 0, 0x07, 0xD0}},
-	testQuery{isValid: false, test: "Max Exceeded Address=1 Quantity=2000", Query: Query{
+	{isValid: false, test: "Max Exceeded Address=1 Quantity=2000", Query: Query{
 		FunctionCode: FunctionReadCoils,
 		Address:      1,
 		Quantity:     2000,
 	}},
-	testQuery{isValid: false, test: "Max Exceeded Quantity=2001", Query: Query{
+	{isValid: false, test: "Max Exceeded Quantity=2001", Query: Query{
 		FunctionCode: FunctionReadCoils,
 		Quantity:     2001,
 	}},
 
 	// Read Discrete Inputs
-	testQuery{isValid: false, test: "Quantity=0", Query: Query{
+	{isValid: false, test: "Quantity=0", Query: Query{
 		FunctionCode: FunctionReadDiscreteInputs,
 	}},
-	testQuery{isValid: true, test: "Min Quantity=1", Query: Query{
+	{isValid: true, test: "Min Quantity=1", Query: Query{
 		FunctionCode: FunctionReadDiscreteInputs,
 		Address:      1,
 		Quantity:     1,
 	}, Data: []byte{0, 1, 0, 1}},
-	testQuery{isValid: true, test: "Max Quantity=2000", Query: Query{
+	{isValid: true, test: "Max Quantity=2000", Query: Query{
 		FunctionCode: FunctionReadDiscreteInputs,
 		Address:      0,
 		Quantity:     2000,
 	}, Data: []byte{0, 0, 0x07, 0xD0}},
-	testQuery{isValid: false, test: "Max Exceeded Address=1 Quantity=2000", Query: Query{
+	{isValid: false, test: "Max Exceeded Address=1 Quantity=2000", Query: Query{
 		FunctionCode: FunctionReadDiscreteInputs,
 		Address:      1,
 		Quantity:     2000,
 	}},
-	testQuery{isValid: false, test: "Max Exceeded Quantity=2001", Query: Query{
+	{isValid: false, test: "Max Exceeded Quantity=2001", Query: Query{
 		FunctionCode: FunctionReadDiscreteInputs,
 		Quantity:     2001,
 	}},
 
 	// Read Holding Registers
-	testQuery{isValid: false, test: "Quantity=0", Query: Query{
+	{isValid: false, test: "Quantity=0", Query: Query{
 		FunctionCode: FunctionReadHoldingRegisters,
 	}},
-	testQuery{isValid: true, test: "Min Quantity=1", Query: Query{
+	{isValid: true, test: "Min Quantity=1", Query: Query{
 		FunctionCode: FunctionReadHoldingRegisters,
 		Address:      1,
 		Quantity:     1,
 	}, Data: []byte{0, 1, 0, 1}},
-	testQuery{isValid: true, test: "Max Quantity=125", Query: Query{
+	{isValid: true, test: "Max Quantity=125", Query: Query{
 		FunctionCode: FunctionReadHoldingRegisters,
 		Address:      0,
 		Quantity:     125,
 	}, Data: []byte{0, 0, 0, 125}},
-	testQuery{isValid: false, test: "Max Exceeded Address=1 Quantity=125", Query: Query{
+	{isValid: false, test: "Max Exceeded Address=1 Quantity=125", Query: Query{
 		FunctionCode: FunctionReadHoldingRegisters,
 		Address:      1,
 		Quantity:     125,
 	}},
-	testQuery{isValid: false, test: "Max Exceeded Quantity=126", Query: Query{
+	{isValid: false, test: "Max Exceeded Quantity=126", Query: Query{
 		FunctionCode: FunctionReadHoldingRegisters,
 		Quantity:     126,
 	}},
 
 	// Read Input Registers
-	testQuery{isValid: false, test: "Quantity=0", Query: Query{
+	{isValid: false, test: "Quantity=0", Query: Query{
 		FunctionCode: FunctionReadInputRegisters,
 	}},
-	testQuery{isValid: true, test: "Min Quantity=1", Query: Query{
+	{isValid: true, test: "Min Quantity=1", Query: Query{
 		FunctionCode: FunctionReadInputRegisters,
 		Address:      1,
 		Quantity:     1,
 	}, Data: []byte{0, 1, 0, 1}},
-	testQuery{isValid: true, test: "Max Quantity=125", Query: Query{
+	{isValid: true, test: "Max Quantity=125", Query: Query{
 		FunctionCode: FunctionReadInputRegisters,
 		Address:      0,
 		Quantity:     125,
 	}, Data: []byte{0, 0, 0, 125}},
-	testQuery{isValid: false, test: "Max Exceeded Address=1 Quantity=125", Query: Query{
+	{isValid: false, test: "Max Exceeded Address=1 Quantity=125", Query: Query{
 		FunctionCode: FunctionReadInputRegisters,
 		Address:      1,
 		Quantity:     125,
 	}},
-	testQuery{isValid: false, test: "Max Exceeded Quantity=126", Query: Query{
+	{isValid: false, test: "Max Exceeded Quantity=126", Query: Query{
 		FunctionCode: FunctionReadInputRegisters,
 		Quantity:     126,
 	}},
 
 	// Write Single Coil
-	testQuery{isValid: false, test: "Values=nil", Query: Query{
+	{isValid: false, test: "Values=nil", Query: Query{
 		FunctionCode: FunctionWriteSingleCoil,
 	}},
-	testQuery{isValid: true, test: "Value[0]=0", Query: Query{
+	{isValid: true, test: "Value[0]=0", Query: Query{
 		FunctionCode: FunctionWriteSingleCoil,
 		Address:      1,
 		Values:       []uint16{0},
 	}, Data: []byte{0, 1, 0, 0}},
-	testQuery{isValid: true, test: "Value[0]=1", Query: Query{
+	{isValid: true, test: "Value[0]=1", Query: Query{
 		FunctionCode: FunctionWriteSingleCoil,
 		Address:      1,
 		Values:       []uint16{1},
 	}, Data: []byte{0, 1, 0xff, 0}},
-	testQuery{isValid: false, test: "len(Values)=2", Query: Query{
+	{isValid: false, test: "len(Values)=2", Query: Query{
 		FunctionCode: FunctionWriteSingleCoil,
 		Values:       []uint16{0, 0},
 	}},
 
 	// Write Single Register
-	testQuery{isValid: false, test: "Values=nil", Query: Query{
+	{isValid: false, test: "Values=nil", Query: Query{
 		FunctionCode: FunctionWriteSingleRegister,
 	}},
-	testQuery{isValid: true, test: "len(Values)=1", Query: Query{
+	{isValid: true, test: "len(Values)=1", Query: Query{
 		FunctionCode: FunctionWriteSingleRegister,
 		Address:      1,
 		Values:       []uint16{1},
 	}, Data: []byte{0, 1, 0, 1}},
-	testQuery{isValid: false, test: "len(Values)=2", Query: Query{
+	{isValid: false, test: "len(Values)=2", Query: Query{
 		FunctionCode: FunctionWriteSingleRegister,
 		Values:       []uint16{0, 0},
 	}},
 
 	// Write Multiple Coils
-	testQuery{isValid: false, test: "Quantity=0", Query: Query{
+	{isValid: false, test: "Quantity=0", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Values:       []uint16{0},
 	}},
-	testQuery{isValid: false, test: "Values=nil", Query: Query{
+	{isValid: false, test: "Values=nil", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Quantity:     1,
 	}},
-	testQuery{isValid: false, test: "len(Values)=0", Query: Query{
+	{isValid: false, test: "len(Values)=0", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Quantity:     1,
 		Values:       []uint16{},
 	}},
-	testQuery{isValid: true, test: "Min Quantity=1", Query: Query{
+	{isValid: true, test: "Min Quantity=1", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Address:      1,
 		Quantity:     1,
 		Values:       []uint16{0x8000},
 	}, Data: []byte{0, 1, 0, 1, 1, 0x80}},
-	testQuery{isValid: true, test: "Quantity=16", Query: Query{
+	{isValid: true, test: "Quantity=16", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Address:      1,
 		Quantity:     16,
 		Values:       []uint16{0x8180},
 	}, Data: []byte{0, 1, 0, 16, 2, 0x81, 0x80}},
-	testQuery{isValid: false, test: "Quantity=17 len(values)=1", Query: Query{
+	{isValid: false, test: "Quantity=17 len(values)=1", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Quantity:     17,
 		Values:       []uint16{0},
 	}},
-	testQuery{isValid: true, test: "Quantity=17 len(Values)=2", Query: Query{
+	{isValid: true, test: "Quantity=17 len(Values)=2", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Address:      1,
 		Quantity:     17,
 		Values:       []uint16{0x8182, 0x8000},
 	}, Data: []byte{0, 1, 0, 17, 3, 0x81, 0x82, 0x80}},
-	testQuery{isValid: false, test: "Quantity=17 len(Values)=3", Query: Query{
+	{isValid: false, test: "Quantity=17 len(Values)=3", Query: Query{
 		FunctionCode: FunctionWriteMultipleCoils,
 		Quantity:     17,
 		Values:       []uint16{0, 0, 0},
 	}},
 
 	// Write Multiple Registers
-	testQuery{isValid: false, test: "Quantity=0", Query: Query{
+	{isValid: false, test: "Quantity=0", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Values:       []uint16{0},
 	}},
-	testQuery{isValid: false, test: "Values=nil", Query: Query{
+	{isValid: false, test: "Values=nil", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Quantity:     1,
 	}},
-	testQuery{isValid: false, test: "len(Values)=0", Query: Query{
+	{isValid: false, test: "len(Values)=0", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Quantity:     1,
 		Values:       []uint16{},
 	}},
-	testQuery{isValid: true, test: "Min Quantity=1", Query: Query{
+	{isValid: true, test: "Min Quantity=1", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Address:      1,
 		Quantity:     1,
 		Values:       []uint16{0x8081},
 	}, Data: []byte{0, 1, 0, 1, 2, 0x80, 0x81}},
-	testQuery{isValid: false, test: "Quantity=2 len(values)=1", Query: Query{
+	{isValid: false, test: "Quantity=2 len(values)=1", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Quantity:     2,
 		Values:       []uint16{0},
 	}},
-	testQuery{isValid: true, test: "Quantity=2 len(Values)=2", Query: Query{
+	{isValid: true, test: "Quantity=2 len(Values)=2", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Address:      1,
 		Quantity:     2,
 		Values:       []uint16{0x8081, 0x7071},
 	}, Data: []byte{0, 1, 0, 2, 4, 0x80, 0x81, 0x70, 0x71}},
-	testQuery{isValid: false, test: "Quantity=2 len(Values)=3", Query: Query{
+	{isValid: false, test: "Quantity=2 len(Values)=3", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Quantity:     2,
 		Values:       []uint16{0, 0, 0},
 	}},
-	testQuery{isValid: true, test: "Max Quantity=123", Query: Query{
+	{isValid: true, test: "Max Quantity=123", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Address:      0,
 		Quantity:     123,
@@ -253,36 +253,36 @@ var testQueries = []testQuery{
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0,
 	}},
-	testQuery{isValid: false, test: "Max Exceeded Address=1 Quantity=123", Query: Query{
+	{isValid: false, test: "Max Exceeded Address=1 Quantity=123", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Address:      1,
 		Quantity:     123,
 		Values:       make([]uint16, 123),
 	}},
-	testQuery{isValid: false, test: "Max Exceeded Quantity=124", Query: Query{
+	{isValid: false, test: "Max Exceeded Quantity=124", Query: Query{
 		FunctionCode: FunctionWriteMultipleRegisters,
 		Quantity:     124,
 		Values:       make([]uint16, 124),
 	}},
 
 	// Mask Write Register
-	testQuery{isValid: false, test: "Values=nil", Query: Query{
+	{isValid: false, test: "Values=nil", Query: Query{
 		FunctionCode: FunctionMaskWriteRegister,
 	}},
-	testQuery{isValid: false, test: "len(Values)=0", Query: Query{
+	{isValid: false, test: "len(Values)=0", Query: Query{
 		FunctionCode: FunctionMaskWriteRegister,
 		Values:       []uint16{},
 	}},
-	testQuery{isValid: false, test: "len(Values)=1", Query: Query{
+	{isValid: false, test: "len(Values)=1", Query: Query{
 		FunctionCode: FunctionMaskWriteRegister,
 		Values:       []uint16{0},
 	}},
-	testQuery{isValid: true, test: "len(Values)=2", Query: Query{
+	{isValid: true, test: "len(Values)=2", Query: Query{
 		FunctionCode: FunctionMaskWriteRegister,
 		Address:      1,
 		Values:       []uint16{0x1112, 0x2122},
 	}, Data: []byte{0, 1, 0x11, 0x12, 0x21, 0x22}},
-	testQuery{isValid: false, test: "len(Values)=3", Query: Query{
+	{isValid: false, test: "len(Values)=3", Query: Query{
 		FunctionCode: FunctionMaskWriteRegister,
 		Values:       []uint16{0, 0, 0},
 	}},
