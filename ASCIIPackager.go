@@ -58,7 +58,6 @@ func (pkgr *ASCIIPackager) generateADU(q Query) ([]byte, error) {
 	asciiPkt[0] = ':'                 // 0x3A
 	asciiPkt[asciiBytesUsed] = '\r'   // CR 0x0D
 	asciiPkt[asciiBytesUsed+1] = '\n' // LF 0x0A
-	asciiBytesUsed += 2
 
 	return bytes.ToUpper(asciiPkt), nil
 }

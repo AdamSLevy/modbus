@@ -47,7 +47,6 @@ func (pkgr *RTUPackager) generateADU(q Query) ([]byte, error) {
 	packetCrc := crc(packet[:bytesUsed])
 	packet[bytesUsed] = byte(packetCrc & 0xff)
 	packet[bytesUsed+1] = byte(packetCrc >> 8)
-	bytesUsed += 2
 
 	return packet, nil
 }
