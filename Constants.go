@@ -21,11 +21,6 @@ var ModeNames = map[Mode]string{
 	ModeASCII: "ASCII",
 }
 
-// DefaultPort is the default port number for Modbus TCP
-const (
-	DefaultPort = 502
-)
-
 // MaxRTUSize MaxASCIISize and MaxTCPSize define the maximum allowable number
 // of byes in a single Modbus packet.
 const (
