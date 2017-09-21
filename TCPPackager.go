@@ -11,7 +11,6 @@ import (
 // TCPPackager implements the Packager interface for Modbus TCP.
 type TCPPackager struct {
 	packagerSettings
-	SetAndValidateTransactionID bool
 	net.Conn
 
 	transactionID uint16
