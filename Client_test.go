@@ -21,7 +21,9 @@ func TestClient(t *testing.T) {
 	})
 
 	t.Run("Send", runSendTests)
-	// Give time for the clients to shutdown
+
+	// Shutdown the clntMngr, this is just for testing purposes to avoid a
+	// data race
 	clntMngr.exit <- true
 	if len(clntMngr.clients) > 0 {
 		t.Fatal("Clients did not shutdown on close")

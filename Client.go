@@ -1,8 +1,12 @@
 // Package modbus implements a threadsafe modbus library.
 //
+// Getting Started
+//
 // Start by initializing a valid ConnectionSettings object and passing it to
 // GetClientHandle. If successful, the error will be <nil> and you can use
 // ClientHandle.Send(Query) to transmit a Query.
+//
+// Concurrent Access
 //
 // The ClientHandle can be used in multiple goroutines concurrently as long as
 // ClientHandle.Close() has yet to be called. To allow for each goroutine to
@@ -11,6 +15,8 @@
 // GetClientHandle. The clients are hashed by their ConnectionSettings.Host
 // string, and ConnectionSettings must match exactly for multiple ClientHandles
 // to be returned.
+//
+// Cleanup
 //
 // After all ClientHandles for a given client with the corresponding
 // ConnectionSettings have been closed, the client is automatically shutdown.
@@ -86,6 +92,8 @@ func (cm *clientManager) requestListener() {
 				delete(cm.clients, host)
 			}
 		case <-cm.exit:
+			// Shutdown the clntMngr, this is just for testing
+			// purposes to avoid a data race
 			return
 		}
 	}
@@ -110,7 +118,7 @@ func (cm *clientManager) handleClientRequest(
 		return cl.newClientHandle()
 	}
 	// Set up new client
-	cl := newClient(clReq.ConnectionSettings)
+	cl = newClient(clReq.ConnectionSettings)
 	ch, err := cl.start()
 	if nil == err {
 		cm.clients[cl.Host] = cl

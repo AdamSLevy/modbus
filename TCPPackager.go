@@ -28,9 +28,8 @@ func NewTCPPackager(c ConnectionSettings) (*TCPPackager, error) {
 	}
 	conn.SetKeepAlive(true)
 	return &TCPPackager{
-		Conn: conn,
-		SetAndValidateTransactionID: true,
-		timeout:                     c.Timeout,
+		Conn:    conn,
+		timeout: c.Timeout,
 	}, nil
 }
 
