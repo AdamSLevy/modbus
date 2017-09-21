@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"log"
-	"os"
+	//"os"
 	"os/exec"
 	"regexp"
 	"testing"
@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 			defer cancel()
 		}
 	}
-	testConSettings[3].Host = testConSettings[1].Host
+	//testConSettings[3].Host = testConSettings[1].Host
 	// Give time for the servers to start
 	time.Sleep(250 * time.Millisecond)
 
@@ -109,10 +109,10 @@ func setupModbusServer(cs *ConnectionSettings) context.CancelFunc {
 	}
 
 	diagslave := exec.CommandContext(ctx, diagslaveCmd, diagslaveArgs...)
-	if cs.Mode == ModeTCP {
-		diagslave.Stdout = os.Stdout
-		diagslave.Stderr = os.Stderr
-	}
+	//if cs.Mode == ModeTCP {
+	//	diagslave.Stdout = os.Stdout
+	//	diagslave.Stderr = os.Stderr
+	//}
 	if err := diagslave.Start(); err != nil {
 		log.Fatal(err)
 	}

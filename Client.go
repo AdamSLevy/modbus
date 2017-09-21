@@ -3,50 +3,8 @@ package modbus
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 )
-
-// ClientHandle provides a handle for sending Queries to a Client.
-type clientHandle struct {
-	queryQueue chan query
-	response   chan queryResponse
-	ConnectionSettings
-}
-
-type ClientHandle interface {
-	Send(q Query) ([]byte, error)
-	Close() error
-}
-
-// Send sends a Query to the associated Client and returns the response and
-// error.
-func (ch *clientHandle) Send(q Query) ([]byte, error) {
-	if nil == ch {
-		return nil, fmt.Errorf("ClientHandle is nil")
-	}
-	if nil == ch.queryQueue {
-		return nil, fmt.Errorf("ClientHandle has been closed")
-	}
-	ch.queryQueue <- query{Query: q, response: ch.response}
-	res := <-ch.response
-	return res.data, res.err
-}
-
-// Close closes the ClientHandle. Once all ClientHandles for a given Client
-// have been closed, the Client will shutdown.
-func (ch *clientHandle) Close() error {
-	if nil == ch {
-		return fmt.Errorf("ClientHandle is nil")
-	}
-	if nil == ch.queryQueue {
-		return fmt.Errorf("ClientHandle was already closed")
-	}
-	close(ch.queryQueue)
-	close(ch.response)
-	ch.queryQueue = nil
-	return nil
-}
 
 // ConnectionSettings holds all connection settings. For ModeTCP the Host is
 // the FQDN or IP address AND the port number. For ModeRTU and ModeASCII the
@@ -60,38 +18,148 @@ type ConnectionSettings struct {
 	Timeout time.Duration
 }
 
-// Client is the abstract interface to a client. To start the client and send
-// Queries to it, request a *ClientHandle with NewClientHandle. The underlying
-// client has a queryListener goroutine that listens for Queries and serializes
-// access to its Packager. Clients start when the first ClientHandle is
-// requested with Client.GetClientHandle. Clients shutdown and all associated
-// goroutines exit when all ClientHandles have been closed with
-// ClientHandle.Close(). Clients can be created with NewClient OR ClientHandles
-// can be requested from ClientManager.SetupClient, but not both. Using clients
-// created with NewClient and using the ClientManager are mutually exclusive
-// modes of operation for this library.
-type Client interface {
-	NewClientHandle() (ClientHandle, error)
+// GetClientHandle returns a new ClientHandle for a client with the given
+// ConnectionSettings. ConnectionSettings with the same Host string must also
+// match exactly for a new ClientHandle to be returned. The client is shutdown
+// after all ClientHandles have been Closed. After a client for a given Host
+// has been shutdown it can be reopened with different ConnectionSettings.
+func GetClientHandle(cs ConnectionSettings) (ClientHandle, error) {
+	once.Do(func() {
+		// Set up and start the clientManager singleton
+		clntMngr = clientManager{
+			closeHandle: make(chan string),
+			newClient:   make(chan *clientRequest),
+			clients:     make(map[string]*client),
+			exit:        make(chan interface{}),
+		}
+		go clntMngr.requestListener()
+	})
+
+	// Send a clientRequest to the clientManager
+	req := newClientRequest(cs)
+	clntMngr.newClient <- req
+	res := <-req.response
+	return res.clientHandle, res.Err
 }
 
-// NewClient sets up a client with the given ConnectionSettings and returns a
-// Client interface for requesting ClientHandles. Clients created using
-// NewClient are not managed by the ClientManager. If you use the ClientManager
-// do not use NewClient and instead use ClientManager.SetupClient().
-func NewClient(cs ConnectionSettings) (Client, error) {
-	ptr := clntMngr.Load()
-	if nil != ptr {
-		return nil, fmt.Errorf("ClientManager is already in use. " +
-			"Use of NewClient and ClientManager.SetupClient are " +
-			"mutually exclusive.")
-	}
-	atomic.StoreUint32(&unmanagedClients, 1)
+var clntMngr clientManager
+var once sync.Once
 
-	return &client{
+type clientManager struct {
+	closeHandle chan string
+	newClient   chan *clientRequest
+	clients     map[string]*client
+	exit        chan interface{}
+}
+
+func (cm *clientManager) requestListener() {
+	for {
+		select {
+		case clReq := <-cm.newClient:
+			ch, err := cm.handleClientRequest(clReq)
+			go clReq.sendResponse(ch, err)
+		case host := <-cm.closeHandle:
+			cl := cm.clients[host]
+			cl.numOpenHandles--
+			if cl.numOpenHandles == 0 {
+				close(cl.queries)
+				delete(cm.clients, host)
+			}
+		case <-cm.exit:
+			return
+		}
+	}
+}
+
+func (cm *clientManager) handleClientRequest(
+	clReq *clientRequest) (*clientHandle, error) {
+	cl, ok := cm.clients[clReq.Host]
+	if ok {
+		if cl.ConnectionSettings !=
+			clReq.ConnectionSettings {
+			// Host is in use but other
+			// ConnectionSettings details didn't match
+			err := fmt.Errorf("Host '%s' is already "+
+				"in use with different connection "+
+				"settings.", cl.Host)
+			return nil, err
+		}
+		return cl.newClientHandle()
+	} else {
+		// Set up new client
+		cl := newClient(clReq.ConnectionSettings)
+		ch, err := cl.start()
+		if nil == err {
+			cm.clients[cl.Host] = cl
+		}
+		return ch, err
+	}
+}
+
+// clientRequests are sent to ClientManager to get access to a Client.
+type clientRequest struct {
+	ConnectionSettings
+	response chan clientResponse
+}
+
+type clientResponse struct {
+	*clientHandle
+	Err error
+}
+
+// newClientRequest initializes a new clientRequest with a ClientHandle
+// channel.
+func newClientRequest(cs ConnectionSettings) *clientRequest {
+	return &clientRequest{
 		ConnectionSettings: cs,
-		isManagedClient:    false,
-		newQQSignal:        make(chan interface{}),
-	}, nil
+		response:           make(chan clientResponse),
+	}
+}
+
+// sendResponse is a convenience function used by clientManager's runtime to
+// return a ClientHandle for a clientRequest.
+func (req *clientRequest) sendResponse(ch *clientHandle, err error) {
+	req.response <- clientResponse{clientHandle: ch, Err: err}
+}
+
+// ClientHandle provides a handle for sending Queries to a Client.
+type clientHandle struct {
+	queryQueue chan query
+	response   chan queryResponse
+	ConnectionSettings
+}
+
+type ClientHandle interface {
+	Send(q Query) ([]byte, error)
+	Close() error
+	GetConnectionSettings() ConnectionSettings
+}
+
+// Send sends a Query to the associated Client and returns the response and
+// error.
+func (ch *clientHandle) Send(q Query) ([]byte, error) {
+	if nil == ch.queryQueue {
+		return nil, fmt.Errorf("ClientHandle has been closed")
+	}
+	ch.queryQueue <- query{Query: q, response: ch.response}
+	res := <-ch.response
+	return res.data, res.err
+}
+
+// Close closes the ClientHandle. Once all ClientHandles for a given Client
+// have been closed, the Client will shutdown.
+func (ch *clientHandle) Close() error {
+	if nil == ch.queryQueue {
+		return fmt.Errorf("ClientHandle was already closed")
+	}
+	close(ch.queryQueue)
+	close(ch.response)
+	ch.queryQueue = nil
+	return nil
+}
+
+func (ch *clientHandle) GetConnectionSettings() ConnectionSettings {
+	return ch.ConnectionSettings
 }
 
 // newClient sets up a client with the given ConnectionSettings and returns a
@@ -99,100 +167,55 @@ func NewClient(cs ConnectionSettings) (Client, error) {
 func newClient(cs ConnectionSettings) *client {
 	return &client{
 		ConnectionSettings: cs,
-		isManagedClient:    true,
-		newQQSignal:        make(chan interface{}),
 	}
 }
 
 // client is the underlying type that implements the Client interface.
 type client struct {
-	isManagedClient bool
 	ConnectionSettings
 	Packager
 
-	mu sync.Mutex
-	wg sync.WaitGroup
-
-	qq                chan query
-	newQQSignal       chan interface{}
-	queryListenerDone chan interface{}
-}
-
-// NewClientHandle starts the client if it isn't already running and then, if
-// successful, returns a new ClientHandle and starts a goroutine that forwards
-// the queries sent by that ClientHandle onto the client's main internal query
-// channel.
-func (c *client) NewClientHandle() (ClientHandle, error) {
-	return c.newClientHandle()
-}
-
-func (c *client) newClientHandle() (*clientHandle, error) {
-	if c.qq == nil {
-		return c.start()
-	}
-	// This watch group tracks the number of open ClientHandles
-	c.wg.Add(1)
-	qq := make(chan query)
-
-	// Send a blocking newQQSignal to be cleared when the forwarding
-	// goroutine exits on channel close. This allows the
-	// queryQueueChannelMonitor to avoid a race condition between shutting
-	// down the connection due to all channels closing and another
-	// goroutine, such as the the ClientManager's requestListener, setting
-	// up a new Query channel.
-	go func() {
-		c.newQQSignal <- true
-	}()
-	// Forward queries from the newly created QueryQueue onto the
-	// connection's main internal qq.
-	go func() {
-		for q := range qq {
-			//log.Println(q)
-			c.qq <- q
-		}
-		<-c.newQQSignal // Consume newQQSignal before signaling Done()
-		c.wg.Done()
-	}()
-	return &clientHandle{
-		ConnectionSettings: c.ConnectionSettings,
-		queryQueue:         qq,
-		response:           make(chan queryResponse),
-	}, nil
-
+	queries        chan query
+	numOpenHandles uint
 }
 
 // start sets up the appropriate Transporter and Packager for the given
 // ConnectionSettings and, if successful, starts the client's queryListener and
 // queryQueueChannelMonitor goroutines and returns a new ClientHandle.
 func (c *client) start() (*clientHandle, error) {
-	switch c.Mode {
-	case ModeTCP:
-		p, err := NewTCPPackager(c.ConnectionSettings)
-		if nil != err {
-			return nil, err
-		}
-		c.Packager = p
-	case ModeRTU:
-		p, err := NewRTUPackager(c.ConnectionSettings)
-		if nil != err {
-			return nil, err
-		}
-		c.Packager = p
-	case ModeASCII:
-		p, err := NewASCIIPackager(c.ConnectionSettings)
-		if nil != err {
-			return nil, err
-		}
-		c.Packager = p
+	p, err := NewPackager(c.ConnectionSettings)
+	if nil != err {
+		return nil, err
 	}
-	c.qq = make(chan query)
-	c.queryListenerDone = make(chan interface{}, 1)
+	c.Packager = p
+	c.queries = make(chan query)
 	go c.queryListener()
 
 	ch, _ := c.newClientHandle()
-	go c.queryQueueChannelMonitor()
 
 	return ch, nil
+}
+
+func (c *client) newClientHandle() (*clientHandle, error) {
+	c.numOpenHandles++
+	qq := make(chan query)
+	go c.queryForwarder(qq)
+	ch := &clientHandle{
+		ConnectionSettings: c.ConnectionSettings,
+		queryQueue:         qq,
+		response:           make(chan queryResponse),
+	}
+	return ch, nil
+}
+
+func (c *client) queryForwarder(qq <-chan query) {
+	// This watch group tracks the number of open ClientHandles
+	defer func() {
+		clntMngr.closeHandle <- c.Host
+	}()
+	for q := range qq {
+		c.queries <- q
+	}
 }
 
 // queryListener executes Queries sent on the qq and sends queryResponses to
@@ -202,49 +225,12 @@ func (c *client) queryListener() {
 	defer c.Close()
 
 	// Set up connection for slave
-	for qry := range c.qq {
+	for qry := range c.queries {
 		qry := qry
 		time.Sleep(15 * time.Millisecond)
 		d, e := c.Send(qry.Query)
 		go qry.sendResponse(d, e)
 	}
-	c.queryListenerDone <- true
-}
-
-// queryQueueChannelMonitor waits for all query forwarding goroutines to exit
-// due to their respective ClientHandles being closed. After all ClientHandles
-// are closed this goroutine shutsdown the queryListener by closing the
-// client.qq query channel.
-func (c *client) queryQueueChannelMonitor() {
-	var run = true
-	for run {
-		// Wait until all queryQueue channels have signaled Done()
-		c.wg.Wait()
-		c.mu.Lock()
-		// This is a check for any queryQueue channels that may have been created
-		// between Wait() returning and acquiring the Lock().
-		select {
-		case <-c.newQQSignal:
-			// Relaunch the goroutine holding the blocking newQQSignal signal
-			go func() {
-				c.newQQSignal <- true
-			}()
-			c.mu.Unlock()
-			continue
-		default:
-			run = false
-		}
-	}
-	if c.isManagedClient {
-		// Let the ClientManager know that this client has shutdown
-		clntMngr.Load().(*clientManager).deleteClient <- &c.Host
-	}
-	close(c.qq)
-	defer func() {
-		<-c.queryListenerDone
-		c.qq = nil
-		c.mu.Unlock()
-	}()
 }
 
 // query encapsulates a Query with a queryResponse channel so it can be sent to

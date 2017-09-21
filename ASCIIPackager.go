@@ -35,10 +35,6 @@ func (pkgr *ASCIIPackager) generateADU(q Query) ([]byte, error) {
 
 	packetLen := 2
 	packetLen += len(data) + 1
-	if packetLen > MaxASCIISize {
-		return nil, errors.New("Query Data is too long")
-	}
-
 	rawPkt := make([]byte, packetLen)
 	rawPkt[0] = q.SlaveID
 	rawPkt[1] = byte(q.FunctionCode)

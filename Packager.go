@@ -1,5 +1,7 @@
 package modbus
 
+import "errors"
+
 // Transporter is the underlying communication interface and connection. This
 // is used to store either a TCP connection or a serial/comm port.
 type Transporter interface {
@@ -15,6 +17,7 @@ type Transporter interface {
 type Packager interface {
 	Send(q Query) ([]byte, error)
 	Transporter
+	SetDebug(debug bool)
 }
 
 // PackagerSettings holds settings and data that all packagers use.
@@ -22,4 +25,21 @@ type Packager interface {
 // their respective Modbus protocols.
 type packagerSettings struct {
 	Debug bool
+}
+
+func (ps *packagerSettings) SetDebug(debug bool) {
+	ps.Debug = debug
+}
+
+func NewPackager(cs ConnectionSettings) (Packager, error) {
+	switch cs.Mode {
+	case ModeTCP:
+		return NewTCPPackager(cs)
+	case ModeRTU:
+		return NewRTUPackager(cs)
+	case ModeASCII:
+		return NewASCIIPackager(cs)
+	default:
+		return nil, errors.New("Invalid Mode")
+	}
 }

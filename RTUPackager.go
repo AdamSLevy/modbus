@@ -32,9 +32,6 @@ func (pkgr *RTUPackager) generateADU(q Query) ([]byte, error) {
 	}
 
 	packetLen := len(data) + 4
-	if packetLen > MaxRTUSize {
-		return nil, errors.New("Query Data is too long")
-	}
 
 	packet := make([]byte, packetLen)
 	packet[0] = q.SlaveID

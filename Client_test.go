@@ -1,15 +1,13 @@
 package modbus
 
 import (
-	"sync/atomic"
 	"testing"
-	//"time"
+	"time"
 )
 
 func TestClient(t *testing.T) {
-	t.Run("NewClient", func(t *testing.T) {
+	t.Run("GetClientHandle", func(t *testing.T) {
 		for _, cs := range testConSettings {
-			cs := cs
 			var validStr string
 			if cs.isValid {
 				validStr = "valid/"
@@ -17,48 +15,128 @@ func TestClient(t *testing.T) {
 				validStr = "invalid/"
 			}
 			t.Run(validStr+ModeNames[cs.Mode], func(t *testing.T) {
-				cl, err := NewClient(cs.ConnectionSettings)
-				if nil != err {
-					t.Error(err)
-				}
-				if nil == cl {
-					t.Fatal("NewClient failed to return a valid Client")
-				}
-				ch, err := cl.NewClientHandle()
-				if cs.isValid {
-					if nil != err {
-						t.Fatal(err)
-					} else if nil == ch {
-						t.Fatal("ClientHandle is nil")
-					}
-					if ch.Close() != nil {
-						t.Fatal(err)
-					}
-				} else {
-					if nil == err {
-						t.Fatal("Did not return an error")
-					}
-				}
-				if ch.Close() == nil {
-					t.Fatal("Second Close is nil")
-				}
-				if _, err := ch.Send(testQueries[0].Query); nil == err {
-					t.Fatal("Send after Close returned " +
-						"nil error")
-				}
-
+				testGetClientHandle(t, cs)
 			})
 		}
-		if 1 != atomic.LoadUint32(&unmanagedClients) {
-			t.Error("unmanagedClients not set to 1 after calling NewClient")
-		}
-		cm, err := GetClientManager()
-		if nil == err {
-			t.Error("Failed to return an error after a call to NewClient")
-		}
-		if nil != cm {
-			t.Error("Returned ClientManager after a call to NewClient")
-		}
-		atomic.StoreUint32(&unmanagedClients, 0)
 	})
+
+	t.Run("Send", runSendTests)
+	// Give time for the clients to shutdown
+	clntMngr.exit <- true
+	if len(clntMngr.clients) > 0 {
+		t.Fatal("Clients did not shutdown on close")
+	}
+}
+
+func testGetClientHandle(t *testing.T, cs testConnectionSettings) {
+	t.Parallel()
+	time.Sleep(cs.delay)
+	done := make(chan interface{})
+	var ch ClientHandle
+	var err error
+	go func() {
+		ch, err = GetClientHandle(cs.ConnectionSettings)
+		done <- true
+	}()
+	select {
+	case <-done:
+	case <-time.After(1000 * time.Millisecond):
+		t.Fatal("GetClient timed out")
+	}
+	if cs.isValid {
+		if nil != err {
+			t.Fatal(err)
+		}
+		if ch.GetConnectionSettings() != cs.ConnectionSettings {
+			t.Errorf("Incorrect ConnectionSettings, want %v got %v",
+				cs.ConnectionSettings, ch.GetConnectionSettings())
+		}
+		cs := cs.ConnectionSettings
+		cs.Timeout += 500
+		_, err := GetClientHandle(cs)
+		if nil == err {
+			t.Error("Altered ConnectionSettings err is nil")
+		}
+		if ch.Close() != nil {
+			t.Error(err)
+		}
+		if ch.Close() == nil {
+			t.Error("Second Close is nil")
+		}
+		if _, err := ch.Send(testQueries[0].Query); nil == err {
+			t.Error("Send after Close returned " +
+				"nil error")
+		}
+	} else {
+		if nil == err {
+			t.Error("Did not return an error")
+		}
+	}
+}
+
+func testSend(t *testing.T, cs ConnectionSettings, q testQuery) {
+	t.Parallel()
+	ch, err := GetClientHandle(cs)
+	if nil != err {
+		t.Fatal(err)
+	}
+	done := make(chan interface{})
+	var data []byte
+	go func() {
+		data, err = ch.Send(q.Query)
+		done <- true
+	}()
+	var timedOut bool
+	select {
+	case <-done:
+	case <-time.After(1000 * time.Millisecond):
+		t.Error("Send timed out")
+		timedOut = true
+	}
+	if !timedOut {
+		if q.isValid {
+			if nil != err {
+				t.Error(err)
+			}
+			if nil == data {
+				t.Error("Response data is nil")
+			}
+		} else {
+			if nil == err {
+				t.Error("Error is nil")
+			}
+			if nil != data {
+				t.Error("Response data is not nil")
+			}
+		}
+	}
+	if err := ch.Close(); nil != err {
+		t.Error(err)
+	}
+}
+
+func runSendTests(t *testing.T) {
+	for _, cs := range testConSettings {
+		if cs.isValid {
+			for _, q := range testQueries {
+				var validStr string
+				if q.isValid {
+					validStr = "valid"
+				} else {
+					validStr = "invalid"
+				}
+				fName, ok := FunctionNames[q.FunctionCode]
+				if !ok {
+					fName = "Invalid FunctionCode"
+				}
+				testName := ModeNames[cs.Mode] + "/" +
+					validStr + "/" +
+					fName + "/" +
+					q.test
+				t.Run(testName, func(t *testing.T) {
+					testSend(t, cs.ConnectionSettings, q)
+				})
+			}
+		}
+	}
 }
