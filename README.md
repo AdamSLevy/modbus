@@ -55,6 +55,8 @@ if nil != err {
         fmt.Println(err)
         return
 }
+q, _ := ReadCoils(0,0,16)
+data, err := ch.Send(q)
 ```
 Multiple ClientHandles can be acquired or the same ClientHandle can be copied
 and reused in multiple goroutines. The ConnectionSettings must match exactly if
