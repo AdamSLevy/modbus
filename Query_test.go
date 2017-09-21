@@ -495,7 +495,7 @@ func testResponses(t *testing.T, q testQuery) {
 				testIsValidResponse(t, q.Query, nil, e)
 			})
 		case exceptionBadResponseLength:
-			if IsReadFunction(q.FunctionCode) {
+			if isReadFunction(q.FunctionCode) {
 				response := []byte{
 					q.SlaveID,
 					byte(q.FunctionCode),
@@ -521,7 +521,7 @@ func testResponses(t *testing.T, q testQuery) {
 				})
 			}
 		case exceptionResponseLengthMismatch:
-			if IsReadFunction(q.FunctionCode) {
+			if isReadFunction(q.FunctionCode) {
 				response := []byte{
 					q.SlaveID,
 					byte(q.FunctionCode),
@@ -556,7 +556,7 @@ func testResponses(t *testing.T, q testQuery) {
 				testIsValidResponse(t, q.Query, response, e)
 			})
 		case exceptionWriteDataMismatch:
-			if IsWriteFunction(q.FunctionCode) {
+			if isWriteFunction(q.FunctionCode) {
 				data, _ := q.data()
 				data[2] = 0xfe
 				response := append([]byte{

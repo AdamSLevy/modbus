@@ -25,6 +25,7 @@ func TestClient(t *testing.T) {
 	// Shutdown the clntMngr, this is just for testing purposes to avoid a
 	// data race
 	clntMngr.exit <- true
+	time.Sleep(50 * time.Millisecond)
 	if len(clntMngr.clients) > 0 {
 		t.Fatal("Clients did not shutdown on close")
 	}
