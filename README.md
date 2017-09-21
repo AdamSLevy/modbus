@@ -46,8 +46,8 @@ csRTU := ConnectionSettings{
 }
 ```
 GetClientHandle returns a ClientHandle object which can be used to concurrently
-send Query objects to the underlying client, starting the client with the given
-ConnectionSettings if not already running. 
+send Query objects to the underlying client. This starts the client with the
+given ConnectionSettings if not already running. 
 ```go
 ch, err := modbus.GetClientHandle(csTCP)
 if nil != err {
