@@ -52,13 +52,13 @@ func (q Query) IsValid() (bool, error) {
 	}
 
 	// Check quantity
-	if (IsReadFunction(q.FunctionCode) || IsWriteMultipleFunction(q.FunctionCode)) &&
+	if (isReadFunction(q.FunctionCode) || isWriteMultipleFunction(q.FunctionCode)) &&
 		(q.Quantity == 0 || q.Address+q.Quantity > maxQuantity) {
 		return false, fmt.Errorf("%v: Requested address range [%v, %v] out of range [0, %v]",
 			errString, q.Address, q.Address+q.Quantity, maxQuantity)
 	}
 	// Check len(Values)
-	if IsWriteFunction(q.FunctionCode) {
+	if isWriteFunction(q.FunctionCode) {
 		if len(q.Values) != expectedLen {
 			return false, fmt.Errorf(
 				"%v: len(Values) should be %v but it is: %v",
@@ -109,7 +109,7 @@ func (q Query) isValidResponse(response []byte) (bool, error) {
 		return false, exceptions[exceptionUnknown]
 	}
 
-	if IsWriteFunction(q.FunctionCode) {
+	if isWriteFunction(q.FunctionCode) {
 		data, _ := q.data()
 		for i := 0; i < 4; i++ {
 			if i >= len(response) || data[i] != response[2+i] {
@@ -118,7 +118,7 @@ func (q Query) isValidResponse(response []byte) (bool, error) {
 		}
 	}
 
-	if IsReadFunction(q.FunctionCode) {
+	if isReadFunction(q.FunctionCode) {
 		var expectedLen int
 		switch q.FunctionCode {
 		case FunctionReadCoils:
@@ -150,8 +150,8 @@ func (q Query) data() ([]byte, error) {
 	if valid, err := q.IsValid(); !valid {
 		return nil, err
 	}
-	if IsWriteFunction(q.FunctionCode) {
-		if IsWriteMultipleFunction(q.FunctionCode) {
+	if isWriteFunction(q.FunctionCode) {
+		if isWriteMultipleFunction(q.FunctionCode) {
 			values := dataBlock(q.Values...)
 			if FunctionWriteMultipleCoils == q.FunctionCode {
 				numValues := q.Quantity / 8
@@ -162,7 +162,7 @@ func (q Query) data() ([]byte, error) {
 			}
 			return dataBlockSuffix(values, q.Address, q.Quantity), nil
 		}
-		if IsWriteSingleFunction(q.FunctionCode) {
+		if isWriteSingleFunction(q.FunctionCode) {
 			if q.FunctionCode == FunctionWriteSingleCoil && q.Values[0] != 0 {
 				q.Values[0] = 0xFF00
 			}
@@ -175,7 +175,7 @@ func (q Query) data() ([]byte, error) {
 		}
 	}
 
-	// IsReadFunction() must be true
+	// isReadFunction() must be true
 	return dataBlock(q.Address, q.Quantity), nil
 }
 
@@ -201,7 +201,7 @@ func dataBlockSuffix(suffix []byte, value ...uint16) []byte {
 	return data
 }
 
-// ReadQuery constructs a Query where IsReadFunction(fCode) is true.
+// ReadQuery constructs a Query where isReadFunction(fCode) is true.
 func ReadQuery(slaveID byte, fCode FunctionCode,
 	address, quantity uint16) (Query, error) {
 	q := Query{
@@ -210,14 +210,14 @@ func ReadQuery(slaveID byte, fCode FunctionCode,
 		Address:      address,
 		Quantity:     quantity,
 	}
-	if !IsReadFunction(fCode) {
+	if !isReadFunction(fCode) {
 		return q, fmt.Errorf("Not a valid read function code")
 	}
 	_, err := q.IsValid()
 	return q, err
 }
 
-// WriteSingleQuery constructs a Query where IsWriteSingleFunction(fCode) is
+// WriteSingleQuery constructs a Query where isWriteSingleFunction(fCode) is
 // true.
 func WriteSingleQuery(slaveID byte, fCode FunctionCode,
 	address, value uint16) (Query, error) {
@@ -227,14 +227,14 @@ func WriteSingleQuery(slaveID byte, fCode FunctionCode,
 		Address:      address,
 		Values:       []uint16{value},
 	}
-	if !IsWriteSingleFunction(fCode) {
+	if !isWriteSingleFunction(fCode) {
 		return q, fmt.Errorf("Not a single write function code")
 	}
 	_, err := q.IsValid()
 	return q, err
 }
 
-// WriteMultipleQuery constructs a Query where IsWriteMultipleFunction(fCode)
+// WriteMultipleQuery constructs a Query where isWriteMultipleFunction(fCode)
 // is true.
 func WriteMultipleQuery(slaveID byte, fCode FunctionCode,
 	address, quantity uint16, values []uint16) (Query, error) {
@@ -245,7 +245,7 @@ func WriteMultipleQuery(slaveID byte, fCode FunctionCode,
 		Quantity:     quantity,
 		Values:       values,
 	}
-	if !IsWriteMultipleFunction(fCode) {
+	if !isWriteMultipleFunction(fCode) {
 		return q, fmt.Errorf("Not a multiple write function code")
 	}
 	_, err := q.IsValid()
@@ -312,10 +312,10 @@ func MaskWriteRegister(slaveID byte, address, andMask, orMask uint16) (Query, er
 	return q, err
 }
 
-// IsReadFunction returns true if fCode is FunctionReadCoils,
+// isReadFunction returns true if fCode is FunctionReadCoils,
 // FunctionReadDiscreteInputs, FunctionReadHoldingRegisters, or
 // FunctionReadInputRegisters.
-func IsReadFunction(fCode FunctionCode) bool {
+func isReadFunction(fCode FunctionCode) bool {
 	switch fCode {
 	case FunctionReadCoils:
 		fallthrough
@@ -329,10 +329,10 @@ func IsReadFunction(fCode FunctionCode) bool {
 	return false
 }
 
-// IsWriteFunction returns true if fCode is FunctionWriteSingleCoil,
+// isWriteFunction returns true if fCode is FunctionWriteSingleCoil,
 // FunctionWriteSingleRegister, FunctionWriteMultipleCoils,
 // FunctionWriteMultipleRegisters, or FunctionMaskWriteRegister.
-func IsWriteFunction(fCode FunctionCode) bool {
+func isWriteFunction(fCode FunctionCode) bool {
 	switch fCode {
 	case FunctionWriteSingleCoil:
 		fallthrough
@@ -348,9 +348,9 @@ func IsWriteFunction(fCode FunctionCode) bool {
 	return false
 }
 
-// IsWriteSingleFunction returns true if fCode is FunctionWriteSingleCoil or
+// isWriteSingleFunction returns true if fCode is FunctionWriteSingleCoil or
 // FunctionWriteSingleRegister
-func IsWriteSingleFunction(fCode FunctionCode) bool {
+func isWriteSingleFunction(fCode FunctionCode) bool {
 	switch fCode {
 	case FunctionWriteSingleCoil:
 		fallthrough
@@ -360,9 +360,9 @@ func IsWriteSingleFunction(fCode FunctionCode) bool {
 	return false
 }
 
-// IsWriteMultipleFunction returns true if fCode is FunctionWriteMultipleCoils
+// isWriteMultipleFunction returns true if fCode is FunctionWriteMultipleCoils
 // or FunctionWriteMultipleRegisters.
-func IsWriteMultipleFunction(fCode FunctionCode) bool {
+func isWriteMultipleFunction(fCode FunctionCode) bool {
 	switch fCode {
 	case FunctionWriteMultipleCoils:
 		fallthrough

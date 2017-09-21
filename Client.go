@@ -4,7 +4,7 @@
 //
 // Start by initializing a valid ConnectionSettings object and passing it to
 // GetClientHandle. If successful, the error will be <nil> and you can use
-// ClientHandle.Send(Query) to transmit a Query.
+// ClientHandle.Send(Query) to transmit Queries.
 //
 // Concurrent Access
 //

@@ -92,7 +92,7 @@ func (pkgr *TCPPackager) Send(q Query) ([]byte, error) {
 		return nil, err
 	}
 
-	if IsReadFunction(q.FunctionCode) {
+	if isReadFunction(q.FunctionCode) {
 		return response[3:], nil
 	}
 	// return only the number of bytes read

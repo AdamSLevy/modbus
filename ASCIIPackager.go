@@ -111,7 +111,7 @@ func (pkgr *ASCIIPackager) Send(q Query) ([]byte, error) {
 	}
 
 	// Return only the data payload
-	if IsReadFunction(q.FunctionCode) {
+	if isReadFunction(q.FunctionCode) {
 		return response[3:], nil
 	}
 	return response[2:], nil
