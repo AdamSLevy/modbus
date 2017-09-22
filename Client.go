@@ -43,7 +43,7 @@ import (
 type ConnectionSettings struct {
 	Mode
 	Host    string
-	Baud    int
+	Baud    uint
 	Timeout time.Duration
 }
 

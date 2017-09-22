@@ -9,7 +9,7 @@ import (
 func newSerialPort(c ConnectionSettings) (*serial.Port, error) {
 	conf := &serial.Config{
 		Name:        c.Host,
-		Baud:        c.Baud,
+		Baud:        int(c.Baud),
 		ReadTimeout: c.Timeout,
 	}
 	return serial.OpenPort(conf)
