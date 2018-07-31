@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
-	"github.com/tarm/serial"
 	"log"
+
+	"github.com/tarm/serial"
 )
 
 // ASCIIPackager implements the Packager interface for Modbus ASCII.
@@ -21,7 +22,12 @@ func NewASCIIPackager(c ConnectionSettings) (*ASCIIPackager, error) {
 	if nil != err {
 		return nil, err
 	}
-	return &ASCIIPackager{Port: p}, nil
+	return &ASCIIPackager{
+		Port: p,
+		packagerSettings: packagerSettings{
+			Debug: c.Debug,
+		},
+	}, nil
 }
 
 func (pkgr *ASCIIPackager) generateADU(q Query) ([]byte, error) {
@@ -85,6 +91,10 @@ func (pkgr *ASCIIPackager) Send(q Query) ([]byte, error) {
 		return nil, rerr
 	}
 
+	if pkgr.Debug {
+		log.Printf("Rx Full: %x\n", asciiResponse)
+	}
+
 	// Check the framing of the response
 	if asciiResponse[0] != ':' ||
 		asciiResponse[asciiN-2] != '\r' ||
@@ -104,6 +114,11 @@ func (pkgr *ASCIIPackager) Send(q Query) ([]byte, error) {
 	}
 
 	response = response[:rawN-1]
+
+	if pkgr.Debug {
+		log.Printf("Rx: %x\n", response)
+	}
+
 	// Check the validity of the response
 	if valid, err := q.isValidResponse(response); !valid {
 		return nil, err

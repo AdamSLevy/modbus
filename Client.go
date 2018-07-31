@@ -45,6 +45,7 @@ type ConnectionSettings struct {
 	Host    string
 	Baud    uint
 	Timeout time.Duration
+	Debug   bool
 }
 
 // GetClientHandle returns a new ClientHandle for a client with the given

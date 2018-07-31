@@ -30,6 +30,9 @@ func NewTCPPackager(c ConnectionSettings) (*TCPPackager, error) {
 	return &TCPPackager{
 		Conn:    conn,
 		timeout: c.Timeout,
+		packagerSettings: packagerSettings{
+			Debug: c.Debug,
+		},
 	}, nil
 }
 
@@ -81,12 +84,21 @@ func (pkgr *TCPPackager) Send(q Query) ([]byte, error) {
 		return nil, err
 	}
 
+	if pkgr.Debug {
+		log.Printf("Rx Full: %x\n", response)
+	}
+
 	// Check for matching transactionID
 	if binary.BigEndian.Uint16(response[0:2]) != pkgr.transactionID {
 		return nil, errors.New("Mismatched transactionID")
 	}
 
 	response = response[6:n]
+
+	if pkgr.Debug {
+		log.Printf("Rx: %x\n", response)
+	}
+
 	// Check the validity of the response
 	if valid, err := q.isValidResponse(response); !valid {
 		return nil, err

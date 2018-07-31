@@ -3,9 +3,10 @@ package modbus
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/tarm/serial"
 	"log"
 	"time"
+
+	"github.com/tarm/serial"
 )
 
 // RTUPackager implements the Packager interface for Modbus RTU.
@@ -21,7 +22,11 @@ func NewRTUPackager(c ConnectionSettings) (*RTUPackager, error) {
 	if nil != err {
 		return nil, err
 	}
-	return &RTUPackager{Port: p}, nil
+	return &RTUPackager{
+		Port: p,
+		packagerSettings: packagerSettings{
+			Debug: c.Debug,
+		}}, nil
 }
 
 func (pkgr *RTUPackager) generateADU(q Query) ([]byte, error) {
@@ -74,12 +79,20 @@ func (pkgr *RTUPackager) Send(q Query) ([]byte, error) {
 		return nil, rerr
 	}
 
+	if pkgr.Debug {
+		log.Printf("Rx Full: %x\n", response)
+	}
+
 	// Confirm the checksum
 	computedCrc := crc(response[:n-2])
 	if computedCrc != binary.LittleEndian.Uint16(response[n-2:]) {
 		return nil, exceptions[exceptionBadChecksum]
 	}
 	response = response[:n-2]
+
+	if pkgr.Debug {
+		log.Printf("Rx: %x\n", response)
+	}
 
 	// Check the validity of the response
 	if valid, err := q.isValidResponse(response); !valid {
