@@ -6,23 +6,20 @@ go:
 - 1.10.x
 - 1.11
 before_install:
-- go get github.com/mattn/goveralls
+- go get -u github.com/mattn/goveralls
 - wget http://www.modbusdriver.com/downloads/diagslave.2.12.zip
 - mkdir diagslave
 - unzip -d diagslave diagslave.2.12.zip
 - chmod u+x diagslave/linux/diagslave
-- export PATH="$PWD/diagslave/linux/:$PATH"
+- export PATH="$PATH:$PWD/diagslave/linux/"
 script:
-- env GO111MODULE=on go build
-- env GO111MODULE=on go test -v -race -coverprofile=coverage.out
-after_script:
-- goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+- goveralls -service=travis-ci -race -v
 git:
   depth: 3
 notifications:
   email: false
   slack:
-    secure: Iij0OxR+dDghvtYtYZInp9951xjgTmQ/8vew+o3lYQS+sOaK+tnDM8d+O2FrFveaUqZ2jJ/wBFK3zXsPpmFoTu+0u6aj8dIryXMC/61yEQiKJh3MXsLkluNfRnE63HgO40YGnC31QLmx3elEVESIpXc+XTQUjTrIV6QroLjAXCjQslOAbPPxsHq/s7sOuUc2zBMGEAv/EIQYsF21WT6VYYdCV6dlKeahsqXF3Va0P0Ml1lJl195o/tVQyoT6lBSlNnczKw0tIBYEHzOOQ/vm7D2rgRexmMhD81oYycmlrxlUQ7lKxYaMQ63SW+smbtBikAqb5dat2/kYBgrpwIbCzzrLPUp8tBxYdz+Eur0zZqO+zpvGlBDkcbl+r3EmaQZ7Kwuuf+TcCx6uI7c5tfjmlToZoZMA0SIEIHrtu6VpThNoEdYJcTN9pRaCZHmXDeCvrg+zPJbcau4br3uGqzagIfDvREIYTd6l0vcpLjbF2g1E9Ps9iYl2mi7DTsTkv1qbiVoMejTBjZZbKJrXVg5d3kBBOMpRBm+Id43o/6Si75oftJxcczmdZn9iyN79QBEvFqt2VJ3a1ChSjaiW4Qaq81d3c+b6M8PEht9Zip4XGzCGo3uD2VOIlUbOh9GgnsgeIgUkxYbqLzlXxuU1A3HlYe3Tt9odCZmfAvOT/Y6eEk8=
+    secure: omXbCVRER63WPu9Q9oLcqhogNCLyZQIpJoq/zt30OJ9HUFTdXa1h3Ghm5Tihm7uXf5KFpVs6D+7u7D7CDX1Pdvw5FGNNp+Dg3GmSnykNW24uTuflhGi0uye1yvehJL9L2LZW7/CP9uDfehZaCXDmgNrA1aIL9uXRLEL+xkN+R/Ce3ES22X2qBvJzSev0P9kCS98eoq4XslD+CHEGv4UN74fV2rKP/DTJTXcDnezrhSeLOxyedyFKLq3iPSm0ElchChSU7bimtMQRVCy4fply4PZR8ZRcilCcIjRyr6Qz+dKFsaJRHygRws6MK7WnkxG5dH7ARHZx2Wtxl/ULecszIrUAWSkIM/hqWRSQtqJ7sXGWcR95n96HwHJylvpkw+pgCAQCvXZw8oUjgyDC5+l4Kixk5LhLvT7u7zadUsq5CZTfAv8YmpY03qic/bsJ1PJQjdV4PywdrjeTKEJef6fw+XTQwRFMEm81TPTyT4e0MvNAtTgKE/YdiH8IDByzeUVrttGahzA9ThiUPVTh+6cYVoGfgvuDOxIyoRFV2odVGdgU6vPvRh+bRcp/UeD3ech0sa62A33IKpHlzdsor4FOjAfp72c8QmC1XcTwd+RBJSxxds/2JxKZB2mwJuMcxfaOlR2nZQJLIaCzmMn4vdqGnfLiX+cFeqxHqkIhktZ4bTM=
 env:
   global:
-    secure: U1+pm85NzpMweqtKApwSdgNfPnCDOxJ/0v5yJTydD6q/qZqkaFDwIyiGN9NF78gT4ORo+Egzfg/Pi/D4/JI3GEkRcChZ8kNnYNczl2bXs1e1O5TpfNSVPBjFYLpaNSKcAdGEWiJ4WFgHHmsK7kaYz0hL/ERZsiIUme98rgeGXi4o3lARfAcR+cd9sXoRWO+kzwQF8ZVE0odKrI0oWDrDDIz/eBIlDOKlj0xZBN5Tzbg7s6fQW+AGGmpAOWAP1mZVVNaTaFMfhEJtAYa81/KCYYd7BFs+dUlgWgDPuNaC1FpC6+xlXlWocNMi/DGg7FiO1Vo+2ZnWQ3O6WPSBDGAv9/BMDN52rquHC6NKRd2dMQxwzgkOKy4QYEn2SPDJExgQ6qavSErtt+6fkmlGicWcby+TFc1Md7zYb+uIxjP+3Do8fTqQsxbjVfVpCyvP/MnHn2TITIRLWLvq8Qq9x6JFBqxjU4P+tbiBxY9dqV+zqBa0s79oocflihRVeYHWu8KtYpRaAYES/xvMOg4pOIk+Z5SUJkESxzyX7AV9KmpOlBWP2A1+SLY0VB8Cn63zrSBlMcj+vK2/wYRV+14mZRlUuesjGAvEE70XOPcyBacezYMu/c1u9Ot0UclieSVCwR4bbF5oPpwOJFFSCS2e4Hspzno2e4kGM/iXk9rYnDGTJm0=
+  - GO111MODULE=on
