@@ -1,4 +1,10 @@
+github.com/AdamSLevy/serial v0.0.0-20180114052751-eaafced92e96 h1:CXiXNcmzoIA0+kkOYDFe29hafjfJYNS8yVB9xJ+3qMc=
+github.com/AdamSLevy/serial v0.0.0-20180114052751-eaafced92e96/go.mod h1:fLjbAsKgZVudriYgxHl2mPbfPcU7K6vtCUk9Rui9xOA=
+github.com/AdamSLevy/serial v0.0.0-20180829200403-f641148757ea h1:zgypuhv2cVwFhk+UMN8K2H0r7EoimxI5+PyVMh2+bLA=
+github.com/AdamSLevy/serial v0.0.0-20180829200403-f641148757ea/go.mod h1:fLjbAsKgZVudriYgxHl2mPbfPcU7K6vtCUk9Rui9xOA=
 github.com/tarm/serial v0.0.0-20180114052751-eaafced92e96 h1:pLss0TM/G46eE2p8NIRYIlB12vrPvWXiqDoCKA52wwQ=
 github.com/tarm/serial v0.0.0-20180114052751-eaafced92e96/go.mod h1:kDXzergiv9cbyO7IOYJZWg1U88JhDg3PB6klq9Hg2pA=
 golang.org/x/sys v0.0.0-20180824143301-4910a1d54f87 h1:GqwDwfvIpC33dK9bA1fD+JiDUNsuAiQiEkpHqUKze4o=
 golang.org/x/sys v0.0.0-20180824143301-4910a1d54f87/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
+golang.org/x/sys v0.0.0-20180828065106-d99a578cf41b h1:cmOZLU2i7CLArKNViO+ZCQ47wqYFyKEIpbGWp+b6Uoc=
+golang.org/x/sys v0.0.0-20180828065106-d99a578cf41b/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=

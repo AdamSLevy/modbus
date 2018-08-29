@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	//"os"
 	"os/exec"
 	"regexp"
 	"testing"
@@ -28,7 +27,6 @@ func TestMain(m *testing.M) {
 
 type testConnectionSettings struct {
 	isValid bool
-	delay   time.Duration
 	ConnectionSettings
 }
 
@@ -39,9 +37,6 @@ var testConSettings = [...]testConnectionSettings{
 		Mode: ModeRTU, Baud: 19200, Timeout: 500 * time.Millisecond}},
 	{isValid: true, ConnectionSettings: ConnectionSettings{
 		Mode: ModeTCP, Host: "localhost:5020", Timeout: 500 * time.Millisecond}},
-	//{isValid: false, delay: 50 * time.Millisecond,
-	//	ConnectionSettings: ConnectionSettings{
-	//		Mode: ModeRTU, Baud: 9600, Timeout: 500 * time.Millisecond}},
 	{isValid: false, ConnectionSettings: ConnectionSettings{
 		Mode: ModeASCII, Timeout: 500 * time.Millisecond}},
 	{isValid: false, ConnectionSettings: ConnectionSettings{

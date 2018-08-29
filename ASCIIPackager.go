@@ -6,7 +6,7 @@ import (
 	"errors"
 	"log"
 
-	"github.com/tarm/serial"
+	"github.com/AdamSLevy/serial"
 )
 
 // ASCIIPackager implements the Packager interface for Modbus ASCII.

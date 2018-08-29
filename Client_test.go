@@ -33,7 +33,6 @@ func TestClient(t *testing.T) {
 
 func testGetClientHandle(t *testing.T, cs testConnectionSettings) {
 	t.Parallel()
-	time.Sleep(cs.delay)
 	done := make(chan interface{})
 	var ch ClientHandle
 	var err error

@@ -50,7 +50,6 @@ func TestPackager(t *testing.T) {
 
 func testPackager(t *testing.T, p Packager) {
 	t.Parallel()
-	p.SetDebug(true)
 	for _, q := range testQueries {
 		var validStr string
 		if q.isValid {
@@ -67,9 +66,6 @@ func testPackager(t *testing.T, p Packager) {
 			q.test
 		t.Run(testName, func(t *testing.T) {
 			testPackagerSend(t, p, q)
-			if q.isValid {
-				p.SetDebug(false)
-			}
 		})
 	}
 }

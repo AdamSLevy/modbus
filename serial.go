@@ -1,7 +1,7 @@
 package modbus
 
 import (
-	"github.com/tarm/serial"
+	"github.com/AdamSLevy/serial"
 )
 
 // newSerialPort is used by both the ASCIIPackager and the RTUPackager to set
