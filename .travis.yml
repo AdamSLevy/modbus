@@ -6,7 +6,6 @@ go:
 - 1.10.x
 - 1.11
 before_install:
-- sudo apt-get install moreutils
 - go get -u github.com/mattn/goveralls
 - wget http://www.modbusdriver.com/downloads/diagslave.2.12.zip
 - mkdir diagslave
@@ -14,7 +13,7 @@ before_install:
 - chmod u+x diagslave/linux/diagslave
 - export PATH="$PATH:$PWD/diagslave/linux/"
 script:
-- bash -c "go test -race -coverprofile=coverage.out | pee cat 'grep PASS &>/dev/null'"
+- go test -race -coverprofile=coverage.out | grep -E'PASS|$'
 - goveralls -service=travis-ci -race -coverprofile=coverage.out
 git:
   depth: 3
