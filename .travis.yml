@@ -14,7 +14,7 @@ before_install:
 - chmod u+x diagslave/linux/diagslave
 - export PATH="$PATH:$PWD/diagslave/linux/"
 script:
-- go test -race -coverprofile=coverage.out | pee cat 'grep PASS &>/dev/null'
+- sh "go test -race -coverprofile=coverage.out | pee cat 'grep PASS &>/dev/null'"
 - goveralls -service=travis-ci -race -coverprofile=coverage.out
 git:
   depth: 3
