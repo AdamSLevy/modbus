@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/AdamSLevy/serial"
+	"github.com/tarm/serial"
 )
 
 // RTUPackager implements the Packager interface for Modbus RTU.
